@@ -115,7 +115,7 @@ class GameScene extends Phaser.Scene {
         this.orbs = this.physics.add.group();
 
         // --- Enemy Spawn Timer ---
-        this.baseSpawnDelay = 150;
+        this.baseSpawnDelay = 70;
         this.currentSpawnDelay = this.baseSpawnDelay;
         this.lastSpawnAdjust = 0;
         this.spawnTimer = this.time.addEvent({
@@ -153,7 +153,7 @@ class GameScene extends Phaser.Scene {
         // --- Dynamic spawn rate scaling ---
         // Every 30 seconds, increase spawn rate by 15%
         const elapsedSec = Math.floor(this.survivalTime / 1000);
-        if (elapsedSec - this.lastSpawnAdjust >= 30) {
+        if (elapsedSec - this.lastSpawnAdjust >= 10) {
             this.lastSpawnAdjust = elapsedSec;
             // Decrease delay by 15%
             this.currentSpawnDelay *= 0.85;
