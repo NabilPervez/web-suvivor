@@ -4,7 +4,7 @@ class GameScene extends Phaser.Scene {
 
         // Player properties
         this.player = null;
-        this.playerSpeed = 200;
+        this.playerSpeed = 240; // +20% speed (200 * 1.2 = 240)
         this.playerHealth = 5;
         this.maxHealth = 5;
         this.isPlayerInvincible = false;
@@ -15,7 +15,7 @@ class GameScene extends Phaser.Scene {
 
         // Weapon properties
         this.projectiles = null;
-        this.fireCooldown = 3000;
+        this.fireCooldown = 2400; // -20% cooldown (3000 * 0.8 = 2400)
         this.lastFired = 0;
 
         // Enemy properties
@@ -79,14 +79,15 @@ class GameScene extends Phaser.Scene {
         if (data && data.playerShape) {
             this.playerShape = data.playerShape;
         }
+        // Adjust initial weapon cooldown and projectile count for shapes
         if (this.playerShape === 'circle') {
-            this.fireCooldown = 2000;
+            this.fireCooldown = 1600; // 2000 (original) * 0.8 = 1600
             this.projectileCount = 1;
         } else if (this.playerShape === 'triangle') {
-            this.fireCooldown = 5000;
+            this.fireCooldown = 4000; // 5000 (original) * 0.8 = 4000
             this.projectileCount = 3;
         } else if (this.playerShape === 'square') {
-            this.fireCooldown = 3000;
+            this.fireCooldown = 2400; // 3000 (original) * 0.8 = 2400
             this.projectileCount = 2;
         }
     }
@@ -137,8 +138,8 @@ class GameScene extends Phaser.Scene {
             loop: true
         });
 
-        // Spawn some starting enemies
-        for (let i = 1; i < 9; i++) {
+        // Spawn some starting enemies (reduced by 50%)
+        for (let i = 1; i < 5; i++) { // was i < 9
             this.spawnEnemy('red');
         }
 
@@ -630,8 +631,8 @@ class GameScene extends Phaser.Scene {
         orb.body && orb.body.setVelocity(0, 0);
         orb.setDepth(120);
 
-        // Auto-destroy orb after 2 seconds
-        this.time.delayedCall(2000, () => {
+        // Auto-destroy orb after 5 seconds
+        this.time.delayedCall(5000, () => {
             if (orb && orb.active) orb.destroy();
         });
     }
@@ -874,4 +875,5 @@ class Orb extends Phaser.Physics.Arcade.Sprite {
         this.setDepth(100); // default orb depth lower than HUD
     }
 }
+
 
