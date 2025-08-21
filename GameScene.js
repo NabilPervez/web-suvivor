@@ -583,7 +583,19 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    openUpgradeMenu() {
+openUpgradeMenu() {
+    this.isUpgradeMenuOpen = true;
+    // Pause all game systems
+    this.spawnTimer.paused = true;
+
+    // --- Fix: Stop player movement immediately ---
+    if (this.player && this.player.body) {
+        this.player.body.setVelocity(0, 0);
+    }
+    // If mobile, clear D-pad input
+    if (this.dpadButtons) {
+        Object.keys(this.dpadButtons).forEach(key => this.dpadButtons[key] = false);
+    }
         this.isUpgradeMenuOpen = true;
         // Pause all game systems
         this.spawnTimer.paused = true;
@@ -749,3 +761,4 @@ class Orb extends Phaser.Physics.Arcade.Sprite {
     }
 
 }
+
