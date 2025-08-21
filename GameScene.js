@@ -15,7 +15,7 @@ class GameScene extends Phaser.Scene {
         
         // Weapon properties
         this.projectiles = null;
-        this.fireCooldown = 2000; // 2-second cooldown from PRD
+        this.fireCooldown = 3000; // 3-second cooldown from PRD
         this.lastFired = 0;
 
         // Enemy properties
@@ -55,7 +55,7 @@ class GameScene extends Phaser.Scene {
         this.cooldownBarBg = null;
         this.cooldownBarFill = null;
         this.gameWon = false;
-        this.winTime = 300000; // 5 minutes in milliseconds
+        this.winTime = 200000; // ? minutes in milliseconds
         this.dpad = null;
         this.isMobile = false;
     }
@@ -115,7 +115,7 @@ class GameScene extends Phaser.Scene {
         this.orbs = this.physics.add.group();
 
         // --- Enemy Spawn Timer ---
-        this.baseSpawnDelay = 70;
+        this.baseSpawnDelay = 100;
         this.currentSpawnDelay = this.baseSpawnDelay;
         this.lastSpawnAdjust = 0;
         this.spawnTimer = this.time.addEvent({
@@ -124,8 +124,9 @@ class GameScene extends Phaser.Scene {
             callbackScope: this,
             loop: true
         });
+        
         // Spawn multiple reds at the beginning
-        for (let i = 0; i < 3; i++) {
+        for (let i = 1; i < 9; i++) {
             this.spawnEnemy('red');
         }
         
@@ -151,12 +152,12 @@ class GameScene extends Phaser.Scene {
             return;
         }
         // --- Dynamic spawn rate scaling ---
-        // Every 30 seconds, increase spawn rate by 15%
+        // Every 30 seconds, increase spawn rate by 20%
         const elapsedSec = Math.floor(this.survivalTime / 1000);
         if (elapsedSec - this.lastSpawnAdjust >= 10) {
             this.lastSpawnAdjust = elapsedSec;
-            // Decrease delay by 15%
-            this.currentSpawnDelay *= 0.85;
+            // Decrease delay by 20%
+            this.currentSpawnDelay *= 0.80;
             this.spawnTimer.reset({ delay: this.currentSpawnDelay, callback: this.spawnEnemy, callbackScope: this, loop: true });
         }
         this.handlePlayerMovement();
@@ -577,7 +578,7 @@ class GameScene extends Phaser.Scene {
         if (this.orbCount >= this.orbsToLevel) {
             this.orbCount = 0;
             this.playerLevel++;
-            this.playerHealth = this.maxHealth; // Restore full health on level up
+            //this.playerHealth = this.maxHealth; // Restore full health on level up
             this.openUpgradeMenu();
         }
     }
@@ -746,4 +747,5 @@ class Orb extends Phaser.Physics.Arcade.Sprite {
         this.setVisible(false);
         this.setDepth(100); // Always on top
     }
+
 }
