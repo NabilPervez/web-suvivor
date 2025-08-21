@@ -1,7 +1,7 @@
 class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
-        
+
         // Player properties
         this.player = null;
         this.playerSpeed = 200;
@@ -12,10 +12,10 @@ class GameScene extends Phaser.Scene {
         // Input properties
         this.cursors = null;
         this.keys = null;
-        
+
         // Weapon properties
         this.projectiles = null;
-        this.fireCooldown = 3000; // 3-second cooldown from PRD
+        this.fireCooldown = 3000;
         this.lastFired = 0;
 
         // Enemy properties
@@ -43,28 +43,33 @@ class GameScene extends Phaser.Scene {
             { key: 'yellow', color: 0xffff33, behavior: 'sinusoidal' }
         ];
         this.upgradeMenu = null;
+        // Keep upgradeOptions always in the same order (do not shuffle)
         this.upgradeOptions = [
-            { name: '+1 Max Health', apply: () => { this.maxHealth++; this.playerHealth = this.maxHealth; } },
+            { name: '+1 Max Health', apply: () => { this.maxHealth++; /* DO NOT restore health */ } },
             { name: '+15% Speed', apply: () => { this.playerSpeed = Math.round(this.playerSpeed * 1.15); } },
             { name: '-20% Cooldown', apply: () => { this.fireCooldown = Math.max(200, Math.round(this.fireCooldown * 0.8)); } },
             { name: '+1 Projectile', apply: () => { this.projectileCount++; } }
         ];
         this.isUpgradeMenuOpen = false;
-        this.playerShape = 'circle'; // Default
-        this.projectileCount = 1; // For upgrades and triangle
+        this.playerShape = 'circle';
+        this.projectileCount = 1;
         this.cooldownBarBg = null;
         this.cooldownBarFill = null;
+        this.cooldownLabel = null;
         this.gameWon = false;
-        this.winTime = 200000; // ? minutes in milliseconds
+        this.winTime = 200000;
         this.dpad = null;
         this.isMobile = false;
+
+        // Game Over state
+        this.gameOver = false;
+        this.gameOverContainer = null;
     }
 
     init(data) {
         if (data && data.playerShape) {
             this.playerShape = data.playerShape;
         }
-        // Set weapon properties based on shape
         if (this.playerShape === 'circle') {
             this.fireCooldown = 2000;
             this.projectileCount = 1;
@@ -73,7 +78,7 @@ class GameScene extends Phaser.Scene {
             this.projectileCount = 3;
         } else if (this.playerShape === 'square') {
             this.fireCooldown = 3000;
-            this.projectileCount = 2; // Square shoots 2 fireballs
+            this.projectileCount = 2;
         }
     }
 
@@ -87,7 +92,7 @@ class GameScene extends Phaser.Scene {
         // --- Input Setup ---
         this.cursors = this.input.keyboard.createCursorKeys();
         this.keys = this.input.keyboard.addKeys('W,A,S,D');
-        
+
         // Check if mobile and create D-pad
         this.isMobile = this.sys.game.config.width < 768;
         if (this.isMobile) {
@@ -98,14 +103,12 @@ class GameScene extends Phaser.Scene {
         this.createHUD();
 
         // --- Weapon System Setup ---
-        // Group to manage all projectiles
         this.projectiles = this.physics.add.group({
             classType: Phaser.Physics.Arcade.Sprite,
-            runChildUpdate: true // Allows projectiles to update themselves
+            runChildUpdate: true
         });
 
         // --- Enemy System Setup ---
-        // Group to manage all enemies
         this.enemies = this.physics.add.group({
             runChildUpdate: true,
             classType: Phaser.Physics.Arcade.Sprite
@@ -124,54 +127,59 @@ class GameScene extends Phaser.Scene {
             callbackScope: this,
             loop: true
         });
-        
-        // Spawn multiple reds at the beginning
+
+        // Spawn some starting enemies
         for (let i = 1; i < 9; i++) {
             this.spawnEnemy('red');
         }
-        
+
         // --- Collision Setup ---
-        // When a projectile hits an enemy
         this.physics.add.collider(this.projectiles, this.enemies, this.projectileHitEnemy, null, this);
-        // When the player hits an enemy
         this.physics.add.overlap(this.player, this.enemies, this.playerHitEnemy, null, this);
-        // Player collects orbs
         this.physics.add.overlap(this.player, this.orbs, this.collectOrb, null, this);
+
+        // Ensure HUD stays above everything (depth already set in createHUD, but set world default lower)
+        this.children.list.forEach(child => {
+            // don't change HUD depths here; we set orb/enemy/player depths explicitly when creating them
+        });
+
+        // Reset states if restarting scene
+        this.gameOver = false;
+        this.isUpgradeMenuOpen = false;
     }
-    
+
     update(time, delta) {
-        if (this.isUpgradeMenuOpen) {
-            // Only update HUD when menu is open, nothing else
+        if (this.isUpgradeMenuOpen || this.gameOver) {
+            // Only update HUD when menu is open or game is over
             this.updateHUD(delta);
             return;
         }
+
         // Check for win condition
         if (!this.gameWon && this.survivalTime >= this.winTime) {
             this.gameWon = true;
             this.showWinScreen();
             return;
         }
-        // --- Dynamic spawn rate scaling ---
-        // Every 30 seconds, increase spawn rate by 20%
+
+        // Dynamic spawn rate scaling
         const elapsedSec = Math.floor(this.survivalTime / 1000);
         if (elapsedSec - this.lastSpawnAdjust >= 10) {
             this.lastSpawnAdjust = elapsedSec;
-            // Decrease delay by 20%
             this.currentSpawnDelay *= 0.80;
             this.spawnTimer.reset({ delay: this.currentSpawnDelay, callback: this.spawnEnemy, callbackScope: this, loop: true });
         }
+
         this.handlePlayerMovement();
         this.handlePlayerShooting(time);
         this.updateHUD(delta);
-
-        // Despawn objects that go too far off-screen
         this.cleanupOutOfBounds();
     }
 
     // --- Creation Helpers ---
 
     createPlayerTexture() {
-        let graphics = this.add.graphics();
+        const graphics = this.add.graphics();
         if (this.playerShape === 'circle') {
             graphics.fillStyle(0xffffff, 1);
             graphics.fillCircle(16, 16, 16);
@@ -189,19 +197,23 @@ class GameScene extends Phaser.Scene {
             this.player.setTexture('playerSquare');
         }
         graphics.destroy();
+
+        // Player above normal entities but below HUD
+        this.player.setDepth(200);
     }
 
     createHUD() {
         // Health display (Hearts)
         this.healthIcons = [];
         for (let i = 0; i < this.maxHealth; i++) {
-            let heart = this.add.graphics();
+            const heart = this.add.graphics();
             heart.fillStyle(0xff0000, 1); // Red heart
             heart.fillTriangle(10, 0, 0, 10, 20, 10);
             heart.fillCircle(5, 10, 5);
             heart.fillCircle(15, 10, 5);
             heart.x = 20 + (i * 25);
             heart.y = 20;
+            heart.setDepth(1000); // HUD depth (on top)
             this.healthIcons.push(heart);
         }
 
@@ -210,6 +222,7 @@ class GameScene extends Phaser.Scene {
             fontSize: '24px',
             fill: '#ffffff'
         }).setOrigin(0.5, 0);
+        this.timerText.setDepth(1000);
 
         // Player Level display (upper right)
         this.levelText = this.add.text(this.sys.game.config.width - 30, 20, `Lv. ${this.playerLevel}`, {
@@ -217,12 +230,15 @@ class GameScene extends Phaser.Scene {
             fill: '#ffff00',
             align: 'right'
         }).setOrigin(1, 0);
+        this.levelText.setDepth(1000);
+
         // Player Experience display (upper right, below level)
         this.expText = this.add.text(this.sys.game.config.width - 30, 50, `EXP: ${this.orbCount}/10`, {
             fontSize: '20px',
             fill: '#00ccff',
             align: 'right'
         }).setOrigin(1, 0);
+        this.expText.setDepth(1000);
 
         // Weapon Cooldown Progress Bar (bottom center)
         const barWidth = 200;
@@ -230,21 +246,24 @@ class GameScene extends Phaser.Scene {
         const barY = this.sys.game.config.height - 40;
         const barX = this.sys.game.config.width / 2 - barWidth / 2;
         this.cooldownBarBg = this.add.rectangle(barX, barY, barWidth, barHeight, 0x222222, 0.7).setOrigin(0, 0.5);
+        this.cooldownBarBg.setDepth(1000);
         this.cooldownBarFill = this.add.rectangle(barX, barY, 0, barHeight, 0x00ff66, 1).setOrigin(0, 0.5);
-        this.add.text(this.sys.game.config.width / 2, barY - 18, 'Weapon Cooldown', { fontSize: '16px', fill: '#fff' }).setOrigin(0.5, 1);
+        this.cooldownBarFill.setDepth(1000);
+        this.cooldownLabel = this.add.text(this.sys.game.config.width / 2, barY - 18, 'Weapon Cooldown', { fontSize: '16px', fill: '#fff' }).setOrigin(0.5, 1);
+        this.cooldownLabel.setDepth(1000);
     }
 
     createDPad() {
         const dpadSize = 120;
         const dpadX = 80;
         const dpadY = this.sys.game.config.height - 80;
-        
+
         this.dpad = this.add.container(dpadX, dpadY);
-        
+
         // D-pad background
         const bg = this.add.circle(0, 0, dpadSize / 2, 0x333333, 0.7);
         this.dpad.add(bg);
-        
+
         // Directional buttons
         const directions = [
             { key: 'up', x: 0, y: -40, angle: -90 },
@@ -252,7 +271,7 @@ class GameScene extends Phaser.Scene {
             { key: 'left', x: -40, y: 0, angle: 180 },
             { key: 'right', x: 40, y: 0, angle: 0 }
         ];
-        
+
         this.dpadButtons = {};
         directions.forEach(dir => {
             const btn = this.add.circle(dir.x, dir.y, 25, 0x666666, 0.8)
@@ -263,29 +282,36 @@ class GameScene extends Phaser.Scene {
             this.dpad.add(btn);
             this.dpadButtons[dir.key] = false;
         });
+
+        this.dpad.setDepth(500); // below HUD
     }
 
     // --- Update Handlers ---
 
     handlePlayerMovement() {
+        // Don't apply movement when menu or game over
+        if (this.isUpgradeMenuOpen || this.gameOver) {
+            if (this.player && this.player.body) this.player.body.setVelocity(0, 0);
+            return;
+        }
+
+        // Reset velocity each frame, then apply input
         this.player.body.setVelocity(0);
         let moveX = 0;
         let moveY = 0;
 
         if (this.isMobile) {
-            // Mobile D-pad controls
             if (this.dpadButtons.up) moveY = -1;
             if (this.dpadButtons.down) moveY = 1;
             if (this.dpadButtons.left) moveX = -1;
             if (this.dpadButtons.right) moveX = 1;
         } else {
-            // Desktop keyboard controls
             if (this.keys.A.isDown || this.cursors.left.isDown) moveX = -1;
             else if (this.keys.D.isDown || this.cursors.right.isDown) moveX = 1;
             if (this.keys.W.isDown || this.cursors.up.isDown) moveY = -1;
             else if (this.keys.S.isDown || this.cursors.down.isDown) moveY = 1;
         }
-        
+
         const magnitude = Math.sqrt(moveX * moveX + moveY * moveY);
         if (magnitude > 0) {
             this.player.body.setVelocity((moveX / magnitude) * this.playerSpeed, (moveY / magnitude) * this.playerSpeed);
@@ -293,8 +319,9 @@ class GameScene extends Phaser.Scene {
     }
 
     handlePlayerShooting(time) {
+        if (this.isUpgradeMenuOpen || this.gameOver) return;
+
         if (time > this.lastFired + this.fireCooldown) {
-            // Find closest enemy
             let closestEnemy = null;
             let minDist = Infinity;
             this.enemies.children.each(enemy => {
@@ -309,14 +336,13 @@ class GameScene extends Phaser.Scene {
             if (closestEnemy) {
                 if (this.playerShape === 'triangle' || this.projectileCount > 1) {
                     if (this.playerShape === 'square') {
-                        // Square shoots 2 fireballs on opposite sides
                         const angleToEnemy = Phaser.Math.Angle.Between(this.player.x, this.player.y, closestEnemy.x, closestEnemy.y);
-                        const angles = [angleToEnemy, angleToEnemy + Math.PI]; // Opposite directions
+                        const angles = [angleToEnemy, angleToEnemy + Math.PI];
                         angles.forEach(angle => {
                             let projectile = this.projectiles.get();
                             if (projectile) {
                                 if (!this.textures.exists('fireball')) {
-                                    let graphics = this.add.graphics();
+                                    const graphics = this.add.graphics();
                                     graphics.fillStyle(0xffa500, 1);
                                     graphics.fillRect(0, 0, 10, 10);
                                     graphics.generateTexture('fireball', 10, 10);
@@ -325,11 +351,11 @@ class GameScene extends Phaser.Scene {
                                 projectile.setTexture('fireball');
                                 projectile.setActive(true).setVisible(true);
                                 projectile.setPosition(this.player.x, this.player.y);
-                                this.physics.velocityFromRotation(angle, 500, projectile.body.velocity);
+                                projectile.body && this.physics.velocityFromRotation(angle, 500, projectile.body.velocity);
+                                projectile.setDepth(150); // below HUD
                             }
                         });
                     } else {
-                        // Triangle or other multi-projectile weapons
                         const angleToEnemy = Phaser.Math.Angle.Between(this.player.x, this.player.y, closestEnemy.x, closestEnemy.y);
                         const spread = Phaser.Math.DegToRad(30);
                         const count = this.projectileCount;
@@ -338,7 +364,7 @@ class GameScene extends Phaser.Scene {
                             let projectile = this.projectiles.get();
                             if (projectile) {
                                 if (!this.textures.exists('fireball')) {
-                                    let graphics = this.add.graphics();
+                                    const graphics = this.add.graphics();
                                     graphics.fillStyle(0xffa500, 1);
                                     graphics.fillRect(0, 0, 10, 10);
                                     graphics.generateTexture('fireball', 10, 10);
@@ -347,17 +373,17 @@ class GameScene extends Phaser.Scene {
                                 projectile.setTexture('fireball');
                                 projectile.setActive(true).setVisible(true);
                                 projectile.setPosition(this.player.x, this.player.y);
-                                this.physics.velocityFromRotation(angle, 500, projectile.body.velocity);
+                                projectile.body && this.physics.velocityFromRotation(angle, 500, projectile.body.velocity);
+                                projectile.setDepth(150);
                             }
                         }
                     }
                     this.lastFired = time;
                 } else {
-                    // Single projectile (circle)
                     let projectile = this.projectiles.get();
                     if (projectile) {
                         if (!this.textures.exists('fireball')) {
-                            let graphics = this.add.graphics();
+                            const graphics = this.add.graphics();
                             graphics.fillStyle(0xffa500, 1);
                             graphics.fillRect(0, 0, 10, 10);
                             graphics.generateTexture('fireball', 10, 10);
@@ -367,13 +393,14 @@ class GameScene extends Phaser.Scene {
                         projectile.setActive(true).setVisible(true);
                         projectile.setPosition(this.player.x, this.player.y);
                         this.physics.moveTo(projectile, closestEnemy.x, closestEnemy.y, 500);
+                        projectile.setDepth(150);
                         this.lastFired = time;
                     }
                 }
             }
         }
     }
-    
+
     updateHUD(delta) {
         // Update timer
         this.survivalTime += delta;
@@ -383,30 +410,29 @@ class GameScene extends Phaser.Scene {
 
         // Update health icons - recreate if maxHealth changed
         if (this.healthIcons.length !== this.maxHealth) {
-            // Remove old hearts
             this.healthIcons.forEach(heart => heart.destroy());
             this.healthIcons = [];
-            // Create new hearts
             for (let i = 0; i < this.maxHealth; i++) {
-                let heart = this.add.graphics();
+                const heart = this.add.graphics();
                 heart.fillStyle(0xff0000, 1);
                 heart.fillTriangle(10, 0, 0, 10, 20, 10);
                 heart.fillCircle(5, 10, 5);
                 heart.fillCircle(15, 10, 5);
                 heart.x = 20 + (i * 25);
                 heart.y = 20;
+                heart.setDepth(1000);
                 this.healthIcons.push(heart);
             }
         }
+
         // Update health visibility
         for (let i = 0; i < this.maxHealth; i++) {
             this.healthIcons[i].setVisible(i < this.playerHealth);
         }
 
-        // Update player level
+        // Update player level & exp
         this.levelText.setText(`Lv. ${this.playerLevel}`);
-        // Update player experience
-        this.expText.setText(`EXP: ${this.orbCount}/10`);
+        this.expText.setText(`EXP: ${this.orbCount}/${this.orbsToLevel}`);
 
         // Update weapon cooldown bar
         if (this.cooldownBarFill) {
@@ -424,19 +450,18 @@ class GameScene extends Phaser.Scene {
     // --- System Logic ---
 
     spawnEnemy(forceType) {
-        let enemy = this.enemies.get();
+        const enemy = this.enemies.get();
         if (enemy) {
-            // Randomly select enemy type, or force a type
             let type;
             if (forceType) {
                 type = this.enemyTypes.find(t => t.key === forceType);
             } else {
                 type = Phaser.Utils.Array.GetRandom(this.enemyTypes);
             }
-            // Create a texture for the enemy if it doesn't exist
+
             const texKey = `enemyRect_${type.key}`;
             if (!this.textures.exists(texKey)) {
-                let graphics = this.add.graphics();
+                const graphics = this.add.graphics();
                 graphics.fillStyle(type.color, 1);
                 graphics.fillRect(0, 0, 30, 30);
                 graphics.generateTexture(texKey, 30, 30);
@@ -447,7 +472,8 @@ class GameScene extends Phaser.Scene {
             enemy.enemyType = type.key;
             enemy.behavior = type.behavior;
             enemy.spawnTime = this.time.now;
-            // Spawn at a random position outside the screen
+
+            // Spawn outside screen edges
             const edge = Phaser.Math.Between(0, 3);
             const width = this.sys.game.config.width;
             const height = this.sys.game.config.height;
@@ -461,12 +487,13 @@ class GameScene extends Phaser.Scene {
             enemy.setPosition(x, y);
             enemy.baseX = x;
             enemy.baseY = y;
-            // Set up movement pattern and completely random speed
+
+            // Behaviour movement
             switch (type.behavior) {
                 case 'track':
                     enemy.body.setVelocity(0, 0);
                     enemy.oscPhase = Phaser.Math.FloatBetween(0, Math.PI * 2);
-                    enemy.moveSpeed = Phaser.Math.Between(30, 120); // Completely random speed
+                    enemy.moveSpeed = Phaser.Math.Between(30, 120);
                     break;
                 case 'straight': {
                     const playerPos = this.getPlayerPosition();
@@ -475,7 +502,7 @@ class GameScene extends Phaser.Scene {
                     const predictY = playerPos.y + playerVel.y * 0.6;
                     const angle = Phaser.Math.Angle.Between(x, y, predictX, predictY);
                     enemy.straightAngle = angle;
-                    enemy.moveSpeed = Phaser.Math.Between(80, 200); // Completely random speed
+                    enemy.moveSpeed = Phaser.Math.Between(80, 200);
                     this.physics.velocityFromRotation(angle, enemy.moveSpeed, enemy.body.velocity);
                     enemy.straightStart = { x, y };
                     enemy.straightTime = 0;
@@ -484,33 +511,36 @@ class GameScene extends Phaser.Scene {
                 case 'diagonal':
                     const dx = Phaser.Math.Between(0, 1) ? 1 : -1;
                     const dy = Phaser.Math.Between(0, 1) ? 1 : -1;
-                    enemy.moveSpeed = Phaser.Math.Between(60, 250); // Completely random speed
+                    enemy.moveSpeed = Phaser.Math.Between(60, 250);
                     enemy.body.setVelocity(enemy.moveSpeed * dx, enemy.moveSpeed * dy);
                     enemy.diagonalDir = { x: dx, y: dy };
                     break;
                 case 'sinusoidal':
                     enemy.sinDir = Phaser.Math.Between(0, 1) ? 'h' : 'v';
                     enemy.sinStart = this.time.now;
-                    enemy.amp = Phaser.Math.Between(50, 150); // Random amplitude
-                    enemy.freq = Phaser.Math.FloatBetween(2, 6); // Random frequency
+                    enemy.amp = Phaser.Math.Between(50, 150);
+                    enemy.freq = Phaser.Math.FloatBetween(2, 6);
                     enemy.baseX = x;
                     enemy.baseY = y;
-                    enemy.moveSpeed = Phaser.Math.Between(50, 200); // Completely random speed
+                    enemy.moveSpeed = Phaser.Math.Between(50, 200);
                     enemy.body.setVelocity(0, 0);
                     break;
             }
+
+            // ensure enemies are under HUD
+            enemy.setDepth(150);
         }
     }
 
     projectileHitEnemy(projectile, enemy) {
         projectile.setActive(false).setVisible(false);
-        // Store enemy position before removing
+        // Save enemy pos
         const ex = enemy.x;
         const ey = enemy.y;
         enemy.setActive(false).setVisible(false);
-        // Create a blue circle orb at the enemy's position
+
+        // Create orb at enemy pos
         const orb = this.orbs.create(ex, ey, null);
-        // Draw blue circle texture if not already present
         if (!this.textures.exists('expOrbBlue')) {
             const g = this.add.graphics();
             g.fillStyle(0x3399ff, 1);
@@ -520,102 +550,99 @@ class GameScene extends Phaser.Scene {
         }
         orb.setTexture('expOrbBlue');
         orb.setDisplaySize(24, 24);
-        orb.body.setAllowGravity(false);
+        orb.body && (orb.body.setAllowGravity(false));
         orb.setCircle(12);
         orb.setOrigin(0.5);
         orb.setActive(true).setVisible(true);
-        orb.body.setVelocity(0, 0);
-    }
+        orb.body && orb.body.setVelocity(0, 0);
+        orb.setDepth(120); // below HUD
 
-    playerHitEnemy(player, enemy) {
-        if (this.isPlayerInvincible) {
-            return; // Do nothing if invincible
-        }
-
-        enemy.setActive(false).setVisible(false); // "Kill" the enemy that hit the player
-        this.playerHealth -= 1;
-        
-        if (this.playerHealth <= 0) {
-            // Game Over logic will go here
-            this.scene.restart(); // For now, just restart the scene
-        } else {
-            // Trigger invincibility
-            this.isPlayerInvincible = true;
-            this.tweens.add({
-                targets: this.player,
-                alpha: { from: 0.5, to: 1.0 },
-                ease: 'Linear',
-                duration: 100,
-                repeat: 10, // Blinks for 2 seconds (100ms * 2 * 10)
-                yoyo: true,
-                onComplete: () => {
-                    this.player.setAlpha(1.0);
-                    this.isPlayerInvincible = false;
-                }
-            });
-        }
+        // Auto-destroy orb after 2 seconds
+        this.time.delayedCall(2000, () => {
+            if (orb && orb.active) orb.destroy();
+        });
     }
 
     spawnSimpleOrb(x, y) {
-        // Create a blue circle orb at (x, y)
-        let orb = this.orbs.create(x, y, null);
-        let graphics = this.add.graphics();
-        graphics.fillStyle(0x3399ff, 1);
-        graphics.fillCircle(0, 0, 12);
-        graphics.generateTexture('simpleOrb', 24, 24);
-        graphics.destroy();
+        const orb = this.orbs.create(x, y, null);
+        if (!this.textures.exists('simpleOrb')) {
+            const graphics = this.add.graphics();
+            graphics.fillStyle(0x3399ff, 1);
+            graphics.fillCircle(12, 12, 12);
+            graphics.generateTexture('simpleOrb', 24, 24);
+            graphics.destroy();
+        }
         orb.setTexture('simpleOrb');
         orb.setDisplaySize(24, 24);
         orb.setCircle(12);
         orb.setOrigin(0.5);
         orb.setActive(true).setVisible(true);
-        orb.body.setVelocity(0, 0);
+        orb.body && orb.body.setVelocity(0, 0);
+        orb.setDepth(120);
+
+        // Auto-destroy orb after 2 seconds
+        this.time.delayedCall(2000, () => {
+            if (orb && orb.active) orb.destroy();
+        });
     }
 
     collectOrb(player, orb) {
+        // immediate collection
+        if (!orb || !orb.active) return;
         orb.destroy();
         this.orbCount++;
         if (this.orbCount >= this.orbsToLevel) {
             this.orbCount = 0;
             this.playerLevel++;
-            //this.playerHealth = this.maxHealth; // Restore full health on level up
+            // Open upgrade menu (do NOT restore health)
             this.openUpgradeMenu();
         }
     }
 
-openUpgradeMenu() {
-    this.isUpgradeMenuOpen = true;
-    // Pause all game systems
-    this.spawnTimer.paused = true;
-
-    // --- Fix: Stop player movement immediately ---
-    if (this.player && this.player.body) {
-        this.player.body.setVelocity(0, 0);
-    }
-    // If mobile, clear D-pad input
-    if (this.dpadButtons) {
-        Object.keys(this.dpadButtons).forEach(key => this.dpadButtons[key] = false);
-    }
+    openUpgradeMenu() {
+        if (this.isUpgradeMenuOpen || this.gameOver) return;
         this.isUpgradeMenuOpen = true;
-        // Pause all game systems
-        this.spawnTimer.paused = true;
-        
-        // Randomly pick 4 upgrades
-        const options = Phaser.Utils.Array.Shuffle(this.upgradeOptions).slice(0, 4);
+
+        // Pause spawn timer, and pause physics for enemies/projectiles
+        if (this.spawnTimer) this.spawnTimer.paused = true;
+        this.physics.world.pause();
+
+        // Stop player movement immediately
+        if (this.player && this.player.body) this.player.body.setVelocity(0, 0);
+
+        // If mobile, clear D-pad
+        if (this.dpadButtons) {
+            Object.keys(this.dpadButtons).forEach(k => this.dpadButtons[k] = false);
+        }
+
+        // Fixed order options (do not shuffle)
+        const options = this.upgradeOptions.slice(0, 4);
+
         const width = this.sys.game.config.width;
         const height = this.sys.game.config.height;
         this.upgradeMenu = this.add.container(width / 2, height / 2);
-        const bg = this.add.rectangle(0, 0, 400, 300, 0x222244, 0.95).setStrokeStyle(4, 0xffff00);
+        this.upgradeMenu.setDepth(2000); // topmost UI
+
+        const bg = this.add.rectangle(0, 0, 420, 320, 0x222244, 0.95).setStrokeStyle(4, 0xffff00);
         this.upgradeMenu.add(bg);
+
         const title = this.add.text(0, -120, 'Level Up! Choose an Upgrade:', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
+        title.setDepth(2000);
         this.upgradeMenu.add(title);
+
+        // Create buttons in fixed order
         options.forEach((opt, i) => {
-            const btn = this.add.rectangle(0, -40 + i * 60, 340, 50, 0x4444aa, 0.9).setStrokeStyle(2, 0xffffff).setInteractive();
-            const txt = this.add.text(0, -40 + i * 60, opt.name, { fontSize: '20px', fill: '#ffff00' }).setOrigin(0.5);
+            const y = -40 + i * 60;
+            const btn = this.add.rectangle(0, y, 360, 50, 0x4444aa, 0.95).setStrokeStyle(2, 0xffffff).setInteractive();
+            btn.setDepth(2000);
+            const txt = this.add.text(0, y, opt.name, { fontSize: '20px', fill: '#ffff00' }).setOrigin(0.5);
+            txt.setDepth(2000);
+
             btn.on('pointerdown', () => this.selectUpgrade(opt));
             this.upgradeMenu.add(btn);
             this.upgradeMenu.add(txt);
         });
+
         // Keyboard support (1-4)
         this.input.keyboard.once('keydown-ONE', () => this.selectUpgrade(options[0]));
         this.input.keyboard.once('keydown-TWO', () => this.selectUpgrade(options[1]));
@@ -624,41 +651,75 @@ openUpgradeMenu() {
     }
 
     selectUpgrade(opt) {
-        if (!this.isUpgradeMenuOpen) return;
+        if (!this.isUpgradeMenuOpen || this.gameOver) return;
+
+        // Apply the upgrade (note: upgrades should not auto-heal the player)
         opt.apply();
-        this.playerHealth = this.maxHealth;
-        if (this.upgradeMenu) this.upgradeMenu.destroy();
+
+        // Destroy menu and resume game systems
+        if (this.upgradeMenu) {
+            this.upgradeMenu.destroy(true);
+            this.upgradeMenu = null;
+        }
         this.isUpgradeMenuOpen = false;
-        // Resume game systems
-        this.spawnTimer.paused = false;
+
+        // Resume world and spawn timer
+        this.physics.world.resume();
+        if (this.spawnTimer) this.spawnTimer.paused = false;
+
+        // Ensure player isn't stuck moving
+        if (this.player && this.player.body) this.player.body.setVelocity(0, 0);
+    }
+
+    showGameOverScreen() {
+        // Create a top layer container for game over UI
+        const width = this.sys.game.config.width;
+        const height = this.sys.game.config.height;
+
+        this.gameOverContainer = this.add.container(width / 2, height / 2);
+        this.gameOverContainer.setDepth(3000);
+
+        const bg = this.add.rectangle(0, 0, 500, 300, 0x881111, 0.95).setStrokeStyle(6, 0xffff00);
+        this.gameOverContainer.add(bg);
+
+        const title = this.add.text(0, -70, 'GAME OVER', { fontSize: '48px', fill: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+        this.gameOverContainer.add(title);
+
+        const stats = this.add.text(0, -10, `Survived: ${Math.floor(this.survivalTime / 60000)}:${Math.floor((this.survivalTime % 60000) / 1000).toString().padStart(2, '0')}\nLevel: ${this.playerLevel}`, { fontSize: '20px', fill: '#ffffff', align: 'center' }).setOrigin(0.5);
+        this.gameOverContainer.add(stats);
+
+        const restartBtn = this.add.rectangle(0, 90, 220, 50, 0x4444aa, 0.95).setInteractive().setStrokeStyle(2, 0xffffff);
+        const restartTxt = this.add.text(0, 90, 'Play Again', { fontSize: '20px', fill: '#ffff00' }).setOrigin(0.5);
+        restartBtn.on('pointerdown', () => {
+            // Restart the scene to reset everything
+            this.scene.restart();
+        });
+        this.gameOverContainer.add(restartBtn);
+        this.gameOverContainer.add(restartTxt);
     }
 
     showWinScreen() {
-        // Stop all game systems
-        this.spawnTimer.remove();
-        this.isUpgradeMenuOpen = true; // Prevent further gameplay
-        
-        // Create win screen
+        // Stop spawn timer and pause world
+        if (this.spawnTimer) this.spawnTimer.remove();
+        this.physics.world.pause();
+        this.isUpgradeMenuOpen = true; // prevent further gameplay
+
         const width = this.sys.game.config.width;
         const height = this.sys.game.config.height;
         const winContainer = this.add.container(width / 2, height / 2);
-        
-        // Background
+        winContainer.setDepth(3000);
+
         const bg = this.add.rectangle(0, 0, 500, 300, 0x00aa00, 0.95).setStrokeStyle(6, 0xffff00);
         winContainer.add(bg);
-        
-        // Win text
+
         const winText = this.add.text(0, -50, 'YOU WIN!', { fontSize: '64px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
         winContainer.add(winText);
-        
-        // Stats
-        const statsText = this.add.text(0, 20, `Survival Time: ${Math.floor(this.survivalTime / 60000)}:${Math.floor((this.survivalTime % 60000) / 1000).toString().padStart(2, '0')}\nLevel: ${this.playerLevel}`, 
-            { fontSize: '24px', fill: '#ffffff', align: 'center' }).setOrigin(0.5);
+
+        const statsText = this.add.text(0, 20, `Survival Time: ${Math.floor(this.survivalTime / 60000)}:${Math.floor((this.survivalTime % 60000) / 1000).toString().padStart(2, '0')}\nLevel: ${this.playerLevel}`, { fontSize: '24px', fill: '#ffffff', align: 'center' }).setOrigin(0.5);
         winContainer.add(statsText);
-        
-        // Restart button
-        const restartBtn = this.add.rectangle(0, 80, 200, 50, 0x4444aa, 0.9).setStrokeStyle(2, 0xffffff).setInteractive();
-        const restartText = this.add.text(0, 80, 'Play Again', { fontSize: '20px', fill: '#ffff00' }).setOrigin(0.5);
+
+        const restartBtn = this.add.rectangle(0, 100, 200, 50, 0x4444aa, 0.9).setStrokeStyle(2, 0xffffff).setInteractive();
+        const restartText = this.add.text(0, 100, 'Play Again', { fontSize: '20px', fill: '#ffff00' }).setOrigin(0.5);
         restartBtn.on('pointerdown', () => this.scene.restart());
         winContainer.add(restartBtn);
         winContainer.add(restartText);
@@ -667,15 +728,13 @@ openUpgradeMenu() {
     cleanupOutOfBounds() {
         const bounds = this.physics.world.bounds;
         const padding = 200; // Extra space outside the screen
-        
+
         this.projectiles.children.each(child => {
             if (child.active && (child.x < -padding || child.x > bounds.width + padding || child.y < -padding || child.y > bounds.height + padding)) {
                 child.setActive(false).setVisible(false);
             }
         });
 
-        // Enemies are handled by the spawn logic (getting recycled)
-        // Clean up orbs (only if far outside bounds)
         this.orbs.children.each(child => {
             if (child.active && (child.x < -padding || child.x > bounds.width + padding || child.y < -padding || child.y > bounds.height + padding)) {
                 child.setActive(false).setVisible(false);
@@ -691,7 +750,8 @@ openUpgradeMenu() {
     // --- Enemy Movement Update ---
     preUpdate(time, delta) {
         super.preUpdate && super.preUpdate(time, delta);
-        // Always ensure at least one red (track) enemy is on screen
+
+        // Ensure at least one red (track) enemy is present
         let redCount = 0;
         this.enemies.children.each(enemy => {
             if (!enemy.active) return;
@@ -700,11 +760,11 @@ openUpgradeMenu() {
         if (redCount === 0) {
             this.spawnEnemy('red');
         }
+
         this.enemies.children.each(enemy => {
             if (!enemy.active) return;
             switch (enemy.behavior) {
                 case 'track': {
-                    // Always home in on the player's current position
                     const playerPos = this.getPlayerPosition();
                     const t = (time - enemy.spawnTime) / 1000;
                     const baseAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, playerPos.x, playerPos.y);
@@ -757,8 +817,6 @@ class Orb extends Phaser.Physics.Arcade.Sprite {
         scene.physics.add.existing(this);
         this.setActive(false);
         this.setVisible(false);
-        this.setDepth(100); // Always on top
+        this.setDepth(100); // default orb depth lower than HUD
     }
-
 }
-
