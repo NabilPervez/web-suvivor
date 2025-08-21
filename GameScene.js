@@ -5,8 +5,8 @@ class GameScene extends Phaser.Scene {
         // Player properties
         this.player = null;
         this.playerSpeed = 400; // +20% speed (200 * 1.2 = 240)
-        this.playerHealth = 5;
-        this.maxHealth = 5;
+        this.playerHealth = 4;
+        this.maxHealth = 4;
         this.isPlayerInvincible = false;
 
         // Input properties
@@ -81,13 +81,13 @@ class GameScene extends Phaser.Scene {
         }
         // Adjust initial weapon cooldown and projectile count for shapes
         if (this.playerShape === 'circle') {
-            this.fireCooldown = 1000; // 2000 (original) * 0.8 = 1600
+            this.fireCooldown = 2000; // 2000 (original) * 0.8 = 1600
             this.projectileCount = 6;
         } else if (this.playerShape === 'triangle') {
             this.fireCooldown = 2000; // 5000 (original) * 0.8 = 4000
             this.projectileCount = 3;
         } else if (this.playerShape === 'square') {
-            this.fireCooldown = 1500; // 3000 (original) * 0.8 = 2400
+            this.fireCooldown = 2000; // 3000 (original) * 0.8 = 2400
             this.projectileCount = 4;
         }
     }
@@ -128,7 +128,7 @@ class GameScene extends Phaser.Scene {
         this.orbs = this.physics.add.group();
 
         // --- Enemy Spawn Timer ---
-        this.baseSpawnDelay = 300;
+        this.baseSpawnDelay = 150;
         this.currentSpawnDelay = this.baseSpawnDelay;
         this.lastSpawnAdjust = 0;
         this.spawnTimer = this.time.addEvent({
@@ -139,7 +139,7 @@ class GameScene extends Phaser.Scene {
         });
 
         // Spawn some starting enemies (reduced by 50%)
-        for (let i = 1; i < 5; i++) { // was i < 9
+        for (let i = 1; i < 10; i++) { // was i < 9
             this.spawnEnemy('red');
         }
 
@@ -173,10 +173,10 @@ class GameScene extends Phaser.Scene {
         }
 
         // Dynamic spawn rate scaling
-        const elapsedSec = Math.floor(this.survivalTime / 1000);
+        const elapsedSec = Math.floor(this.survivalTime / 500); // EVERY FIFTEN SECONDS?
         if (elapsedSec - this.lastSpawnAdjust >= 10) {
             this.lastSpawnAdjust = elapsedSec;
-            this.currentSpawnDelay *= 0.80;
+            this.currentSpawnDelay *= 0.50; // SPAWN DELAY OVER TIME
             this.spawnTimer.reset({ delay: this.currentSpawnDelay, callback: this.spawnEnemy, callbackScope: this, loop: true });
         }
 
@@ -251,7 +251,7 @@ class GameScene extends Phaser.Scene {
         this.expText.setDepth(1000);
 
         // Weapon Cooldown Progress Bar (bottom center)
-        const barWidth = 200;
+        const barWidth = 400;
         const barHeight = 18;
         const barY = this.sys.game.config.height - 40;
         const barX = this.sys.game.config.width / 2 - barWidth / 2;
@@ -875,6 +875,7 @@ class Orb extends Phaser.Physics.Arcade.Sprite {
         this.setDepth(100); // default orb depth lower than HUD
     }
 }
+
 
 
 
