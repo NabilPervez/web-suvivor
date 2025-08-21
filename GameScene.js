@@ -45,7 +45,16 @@ class GameScene extends Phaser.Scene {
         this.upgradeMenu = null;
         // Keep upgradeOptions always in the same order (do not shuffle)
         this.upgradeOptions = [
-            { name: '+1 Max Health', apply: () => { this.maxHealth++; /* DO NOT restore health */ } },
+            { 
+                name: '+1 Max Health', 
+                apply: () => { 
+                    this.maxHealth++; 
+                    // Also give the player 1 heart immediately if not at max
+                    if (this.playerHealth < this.maxHealth) {
+                        this.playerHealth++;
+                    }
+                } 
+            },
             { name: '+15% Speed', apply: () => { this.playerSpeed = Math.round(this.playerSpeed * 1.15); } },
             { name: '-20% Cooldown', apply: () => { this.fireCooldown = Math.max(200, Math.round(this.fireCooldown * 0.8)); } },
             { name: '+1 Projectile', apply: () => { this.projectileCount++; } }
@@ -635,7 +644,11 @@ class GameScene extends Phaser.Scene {
         if (this.orbCount >= this.orbsToLevel) {
             this.orbCount = 0;
             this.playerLevel++;
-            // Open upgrade menu (do NOT restore health)
+            // Refill 1 heart per level up, up to maxHealth
+            if (this.playerHealth < this.maxHealth) {
+                this.playerHealth++;
+            }
+            // Open upgrade menu (do NOT restore all health)
             this.openUpgradeMenu();
         }
     }
@@ -861,3 +874,4 @@ class Orb extends Phaser.Physics.Arcade.Sprite {
         this.setDepth(100); // default orb depth lower than HUD
     }
 }
+
