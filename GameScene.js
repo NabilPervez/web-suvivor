@@ -563,6 +563,47 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    playerHitEnemy(player, enemy) {
+        // If player is already invincible, do nothing
+        if (this.isPlayerInvincible) {
+            return;
+        }
+
+        // Reduce player health
+        this.playerHealth--;
+
+        // Remove the enemy that hit the player
+        enemy.setActive(false).setVisible(false);
+        enemy.destroy();
+
+        // Check for game over condition
+        if (this.playerHealth <= 0) {
+            this.gameOver = true;
+            this.physics.world.pause(); // Stop all physics
+            if (this.player.body) this.player.body.setVelocity(0, 0);
+            this.showGameOverScreen();
+            return; // Stop further execution
+        }
+
+        // Grant temporary invincibility
+        this.isPlayerInvincible = true;
+
+        // Visual feedback for invincibility (blinking effect)
+        this.tweens.add({
+            targets: this.player,
+            alpha: 0.5,
+            duration: 150,
+            ease: 'Linear',
+            yoyo: true,
+            repeat: 4, // Total duration will be 150 * 2 * 5 = 1500ms
+            onComplete: () => {
+                this.player.setAlpha(1.0); // Ensure player is fully visible
+                this.isPlayerInvincible = false; // End invincibility
+            }
+        });
+    }
+
+
     spawnSimpleOrb(x, y) {
         const orb = this.orbs.create(x, y, null);
         if (!this.textures.exists('simpleOrb')) {
