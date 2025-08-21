@@ -539,97 +539,6 @@ class GameScene extends Phaser.Scene {
         const ey = enemy.y;
         enemy.setActive(false).setVisible(false);
 
-        // Create orb at enemy pos
-        const orb = this.orbs.create(ex, ey, null);
-        if (!this.textures.exists('expOrbBlue')) {
-            const g = this.add.graphics();
-            g.fillStyle(0x3399ff, 1);
-            g.fillCircle(12, 12, 12);
-            g.generateTexture('expOrbBlue', 24, 24);
-            g.destroy();
-        }
-        orb.setTexture('expOrbBlue');
-        orb.setDisplaySize(24, 24);
-        orb.body && (orb.body.setAllowGravity(false));
-        orb.setCircle(12);
-        orb.setOrigin(0.5);
-        orb.setActive(true).setVisible(true);
-        orb.body && orb.body.setVelocity(0, 0);
-        orb.setDepth(120); // below HUD
-
-        // Auto-destroy orb after 2 seconds
-        this.time.delayedCall(2000, () => {
-            if (orb && orb.active) orb.destroy();
-        });
-    }
-
-    spawnSimpleOrb(x, y) {
-        const orb = this.orbs.create(x, y, null);
-        if (!this.textures.exists('simpleOrb')) {
-            const graphics = this.add.graphics();
-            graphics.fillStyle(0x3399ff, 1);
-            graphics.fillCircle(12, 12, 12);
-            graphics.generateTexture('simpleOrb', 24, 24);
-            graphics.destroy();
-        }
-        orb.setTexture('simpleOrb');
-        orb.setDisplaySize(24, 24);
-        orb.setCircle(12);
-        orb.setOrigin(0.5);
-        orb.setActive(true).setVisible(true);
-        orb.body && orb.body.setVelocity(0, 0);
-        orb.setDepth(120);
-
-        // Auto-destroy orb after 2 seconds
-        this.time.delayedCall(2000, () => {
-            if (orb && orb.active) orb.destroy();
-        });
-    }
-
-    collectOrb(player, orb) {
-        // immediate collection
-        if (!orb || !orb.active) return;
-        orb.destroy();
-        this.orbCount++;
-        if (this.orbCount >= this.orbsToLevel) {
-            this.orbCount = 0;
-            this.playerLevel++;
-            // Open upgrade menu (do NOT restore health)
-            this.openUpgradeMenu();
-        }
-    }
-
-    openUpgradeMenu() {
-        if (this.isUpgradeMenuOpen || this.gameOver) return;
-        this.isUpgradeMenuOpen = true;
-
-        // Pause spawn timer, and pause physics for enemies/projectiles
-        if (this.spawnTimer) this.spawnTimer.paused = true;
-        this.physics.world.pause();
-
-        // Stop player movement immediately
-        if (this.player && this.player.body) this.player.body.setVelocity(0, 0);
-
-        // If mobile, clear D-pad
-        if (this.dpadButtons) {
-            Object.keys(this.dpadButtons).forEach(k => this.dpadButtons[k] = false);
-        }
-
-        // Fixed order options (do not shuffle)
-        const options = this.upgradeOptions.slice(0, 4);
-
-        const width = this.sys.game.config.width;
-        const height = this.sys.game.config.height;
-        this.upgradeMenu = this.add.container(width / 2, height / 2);
-        this.upgradeMenu.setDepth(2000); // topmost UI
-
-        const bg = this.add.rectangle(0, 0, 420, 320, 0x222244, 0.95).setStrokeStyle(4, 0xffff00);
-        this.upgradeMenu.add(bg);
-
-        const title = this.add.text(0, -120, 'Level Up! Choose an Upgrade:', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
-        title.setDepth(2000);
-        this.upgradeMenu.add(title);
-
         // Create buttons in fixed order
         options.forEach((opt, i) => {
             const y = -40 + i * 60;
@@ -672,6 +581,17 @@ class GameScene extends Phaser.Scene {
     }
 
     showGameOverScreen() {
+        // Stop all game systems
+        if (this.spawnTimer) {
+            this.spawnTimer.paused = true;
+        }
+        this.physics.world.pause();
+        
+        // Stop player movement
+        if (this.player && this.player.body) {
+            this.player.body.setVelocity(0, 0);
+        }
+
         // Create a top layer container for game over UI
         const width = this.sys.game.config.width;
         const height = this.sys.game.config.height;
@@ -685,17 +605,35 @@ class GameScene extends Phaser.Scene {
         const title = this.add.text(0, -70, 'GAME OVER', { fontSize: '48px', fill: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
         this.gameOverContainer.add(title);
 
-        const stats = this.add.text(0, -10, `Survived: ${Math.floor(this.survivalTime / 60000)}:${Math.floor((this.survivalTime % 60000) / 1000).toString().padStart(2, '0')}\nLevel: ${this.playerLevel}`, { fontSize: '20px', fill: '#ffffff', align: 'center' }).setOrigin(0.5);
+        const minutes = Math.floor(this.survivalTime / 60000);
+        const seconds = Math.floor((this.survivalTime % 60000) / 1000);
+        const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        
+        const stats = this.add.text(0, -10, `Survived: ${timeStr}\nLevel: ${this.playerLevel}`, { 
+            fontSize: '20px', 
+            fill: '#ffffff', 
+            align: 'center' 
+        }).setOrigin(0.5);
         this.gameOverContainer.add(stats);
 
         const restartBtn = this.add.rectangle(0, 90, 220, 50, 0x4444aa, 0.95).setInteractive().setStrokeStyle(2, 0xffffff);
         const restartTxt = this.add.text(0, 90, 'Play Again', { fontSize: '20px', fill: '#ffff00' }).setOrigin(0.5);
+        
         restartBtn.on('pointerdown', () => {
             // Restart the scene to reset everything
             this.scene.restart();
         });
+        
         this.gameOverContainer.add(restartBtn);
         this.gameOverContainer.add(restartTxt);
+
+        // Keyboard support for restart
+        this.input.keyboard.once('keydown-SPACE', () => {
+            this.scene.restart();
+        });
+        this.input.keyboard.once('keydown-ENTER', () => {
+            this.scene.restart();
+        });
     }
 
     showWinScreen() {
@@ -715,7 +653,15 @@ class GameScene extends Phaser.Scene {
         const winText = this.add.text(0, -50, 'YOU WIN!', { fontSize: '64px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
         winContainer.add(winText);
 
-        const statsText = this.add.text(0, 20, `Survival Time: ${Math.floor(this.survivalTime / 60000)}:${Math.floor((this.survivalTime % 60000) / 1000).toString().padStart(2, '0')}\nLevel: ${this.playerLevel}`, { fontSize: '24px', fill: '#ffffff', align: 'center' }).setOrigin(0.5);
+        const minutes = Math.floor(this.survivalTime / 60000);
+        const seconds = Math.floor((this.survivalTime % 60000) / 1000);
+        const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        
+        const statsText = this.add.text(0, 20, `Survival Time: ${timeStr}\nLevel: ${this.playerLevel}`, { 
+            fontSize: '24px', 
+            fill: '#ffffff', 
+            align: 'center' 
+        }).setOrigin(0.5);
         winContainer.add(statsText);
 
         const restartBtn = this.add.rectangle(0, 100, 200, 50, 0x4444aa, 0.9).setStrokeStyle(2, 0xffffff).setInteractive();
@@ -750,6 +696,9 @@ class GameScene extends Phaser.Scene {
     // --- Enemy Movement Update ---
     preUpdate(time, delta) {
         super.preUpdate && super.preUpdate(time, delta);
+
+        // Don't update enemies if game is over
+        if (this.gameOver) return;
 
         // Ensure at least one red (track) enemy is present
         let redCount = 0;
@@ -819,4 +768,130 @@ class Orb extends Phaser.Physics.Arcade.Sprite {
         this.setVisible(false);
         this.setDepth(100); // default orb depth lower than HUD
     }
-}
+} orb at enemy pos
+        const orb = this.orbs.create(ex, ey, null);
+        if (!this.textures.exists('expOrbBlue')) {
+            const g = this.add.graphics();
+            g.fillStyle(0x3399ff, 1);
+            g.fillCircle(12, 12, 12);
+            g.generateTexture('expOrbBlue', 24, 24);
+            g.destroy();
+        }
+        orb.setTexture('expOrbBlue');
+        orb.setDisplaySize(24, 24);
+        orb.body && (orb.body.setAllowGravity(false));
+        orb.setCircle(12);
+        orb.setOrigin(0.5);
+        orb.setActive(true).setVisible(true);
+        orb.body && orb.body.setVelocity(0, 0);
+        orb.setDepth(120); // below HUD
+
+        // Auto-destroy orb after 2 seconds if not collected
+        this.time.delayedCall(2000, () => {
+            if (orb && orb.active) {
+                orb.destroy();
+            }
+        });
+    }
+
+    spawnSimpleOrb(x, y) {
+        const orb = this.orbs.create(x, y, null);
+        if (!this.textures.exists('simpleOrb')) {
+            const graphics = this.add.graphics();
+            graphics.fillStyle(0x3399ff, 1);
+            graphics.fillCircle(12, 12, 12);
+            graphics.generateTexture('simpleOrb', 24, 24);
+            graphics.destroy();
+        }
+        orb.setTexture('simpleOrb');
+        orb.setDisplaySize(24, 24);
+        orb.setCircle(12);
+        orb.setOrigin(0.5);
+        orb.setActive(true).setVisible(true);
+        orb.body && orb.body.setVelocity(0, 0);
+        orb.setDepth(120);
+
+        // Auto-destroy orb after 2 seconds if not collected
+        this.time.delayedCall(2000, () => {
+            if (orb && orb.active) {
+                orb.destroy();
+            }
+        });
+    }
+
+    collectOrb(player, orb) {
+        // immediate collection
+        if (!orb || !orb.active) return;
+        orb.destroy();
+        this.orbCount++;
+        if (this.orbCount >= this.orbsToLevel) {
+            this.orbCount = 0;
+            this.playerLevel++;
+            // Open upgrade menu (do NOT restore health)
+            this.openUpgradeMenu();
+        }
+    }
+
+    // NEW: Player hit by enemy - damage and check game over
+    playerHitEnemy(player, enemy) {
+        if (this.isPlayerInvincible || this.gameOver) return;
+
+        // Take damage
+        this.playerHealth--;
+        
+        // Check for game over
+        if (this.playerHealth <= 0) {
+            this.gameOver = true;
+            this.showGameOverScreen();
+            return;
+        }
+
+        // Make player temporarily invincible
+        this.isPlayerInvincible = true;
+        
+        // Visual feedback - make player flash
+        this.tweens.add({
+            targets: this.player,
+            alpha: 0.5,
+            duration: 100,
+            yoyo: true,
+            repeat: 5,
+            onComplete: () => {
+                this.player.alpha = 1;
+                this.isPlayerInvincible = false;
+            }
+        });
+    }
+
+    openUpgradeMenu() {
+        if (this.isUpgradeMenuOpen || this.gameOver) return;
+        this.isUpgradeMenuOpen = true;
+
+        // Pause spawn timer, and pause physics for enemies/projectiles
+        if (this.spawnTimer) this.spawnTimer.paused = true;
+        this.physics.world.pause();
+
+        // Stop player movement immediately
+        if (this.player && this.player.body) this.player.body.setVelocity(0, 0);
+
+        // If mobile, clear D-pad
+        if (this.dpadButtons) {
+            Object.keys(this.dpadButtons).forEach(k => this.dpadButtons[k] = false);
+        }
+
+        // Fixed order options (do not shuffle) - only show first 4 options
+        const options = this.upgradeOptions.slice(0, 4);
+
+        const width = this.sys.game.config.width;
+        const height = this.sys.game.config.height;
+        this.upgradeMenu = this.add.container(width / 2, height / 2);
+        this.upgradeMenu.setDepth(2000); // topmost UI
+
+        const bg = this.add.rectangle(0, 0, 420, 320, 0x222244, 0.95).setStrokeStyle(4, 0xffff00);
+        this.upgradeMenu.add(bg);
+
+        const title = this.add.text(0, -120, 'Level Up! Choose an Upgrade:', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
+        title.setDepth(2000);
+        this.upgradeMenu.add(title);
+
+        // Create
