@@ -84,7 +84,7 @@ export class GameScene extends Phaser.Scene {
         // --- UI ---
         this.ui = new UIManager(this);
         this.ui.createHUD(this.scale.width, this.scale.height, this.player.maxHealth);
-        this.ui.createDPad();
+        this.ui.createMobileControls();
 
         // --- Input ---
         this.cursors = this.input.keyboard!.createCursorKeys();
@@ -131,7 +131,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         // Entities
-        this.player.move(this.cursors, this.wasd, this.ui.dpadState);
+        this.player.move(this.cursors, this.wasd, this.ui.joystickVector);
 
         let closest: Enemy | null = null;
         let minDist = Infinity;

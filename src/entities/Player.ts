@@ -58,28 +58,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.setDepth(200);
     }
 
-    move(cursors: Phaser.Types.Input.Keyboard.CursorKeys, wasd: any, dpad: any) {
+    move(cursors: Phaser.Types.Input.Keyboard.CursorKeys, wasd: any, joystick: { x: number, y: number }) {
         this.setVelocity(0);
         let mx = 0;
         let my = 0;
 
-        if (dpad && (dpad.up || dpad.down || dpad.left || dpad.right)) {
-            if (dpad.up) my = -1;
-            if (dpad.down) my = 1;
-            if (dpad.left) mx = -1;
-            if (dpad.right) mx = 1;
+        // Joystick override or Keyboard
+        if (Math.abs(joystick.x) > 0.05 || Math.abs(joystick.y) > 0.05) {
+            mx = joystick.x;
+            my = joystick.y;
         } else {
             if (wasd.W.isDown || cursors.up.isDown) my = -1;
             else if (wasd.S.isDown || cursors.down.isDown) my = 1;
 
             if (wasd.A.isDown || cursors.left.isDown) mx = -1;
             else if (wasd.D.isDown || cursors.right.isDown) mx = 1;
+
+            // Normalize keyboard to 1 if moving
+            const mag = Math.sqrt(mx * mx + my * my);
+            if (mag > 0) {
+                mx /= mag; // Normalize
+                my /= mag;
+            }
         }
 
-        const mag = Math.sqrt(mx * mx + my * my);
-        if (mag > 0) {
-            this.setVelocity((mx / mag) * this.speed, (my / mag) * this.speed);
-        }
+        // Apply speed
+        this.setVelocity(mx * this.speed, my * this.speed);
     }
 
     autoFire(time: number, closestEnemy: Phaser.Physics.Arcade.Sprite | null) {

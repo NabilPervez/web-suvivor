@@ -11,8 +11,12 @@ export class UIManager {
     private cooldownBarFill!: Phaser.GameObjects.Rectangle;
     private dpadContainer!: Phaser.GameObjects.Container;
 
-    // Input State from UI (D-Pad)
-    public dpadState = { up: false, down: false, left: false, right: false };
+    // Input State from UI (Joystick)
+    private joystickBase!: Phaser.GameObjects.Arc;
+    private joystickThumb!: Phaser.GameObjects.Arc;
+    private joystickPointer: Phaser.Input.Pointer | null = null;
+    public joystickVector = { x: 0, y: 0 };
+    private isMobile = false;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
@@ -90,35 +94,71 @@ export class UIManager {
         this.cooldownBarFill.setFillStyle(progress >= 1 ? 0x00ff66 : 0xff4444, 1);
     }
 
-    createDPad() {
-        if (this.scene.scale.width >= 768) return; // Not mobile
+    createMobileControls() {
+        const { width, height } = this.scene.scale;
+        this.isMobile = width < 768; // Check if mobile
 
-        const dpadSize = 120;
-        const x = 80;
-        const y = this.scene.scale.height - 80;
+        if (!this.isMobile) return;
 
-        this.dpadContainer = this.scene.add.container(x, y).setDepth(2000);
-        this.dpadContainer.add(this.scene.add.circle(0, 0, dpadSize / 2, 0x333333, 0.7));
+        const isLandscape = width > height;
+        const radius = 60;
 
-        const dirs = [
-            { key: 'up', x: 0, y: -40 },
-            { key: 'down', x: 0, y: 40 },
-            { key: 'left', x: -40, y: 0 },
-            { key: 'right', x: 40, y: 0 }
-        ] as const;
+        // Position: Bottom-Center (Portrait) or Bottom-Left (Landscape)
+        let x = width / 2;
+        let y = height - 100;
 
-        dirs.forEach(d => {
-            const btn = this.scene.add.circle(d.x, d.y, 25, 0x666666, 0.8)
-                .setInteractive();
+        if (isLandscape) {
+            x = 100;
+            y = height - 100;
+        }
 
-            const set = (v: boolean) => (this.dpadState as any)[d.key] = v;
+        // Base
+        this.joystickBase = this.scene.add.circle(x, y, radius, 0x333333, 0.5).setDepth(2000).setInteractive();
 
-            btn.on('pointerdown', () => set(true));
-            btn.on('pointerup', () => set(false));
-            btn.on('pointerout', () => set(false));
+        // Thumb
+        this.joystickThumb = this.scene.add.circle(x, y, 30, 0x666666, 0.8).setDepth(2001);
 
-            this.dpadContainer.add(btn);
+        // Input Handling
+        this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (this.joystickBase.getBounds().contains(pointer.x, pointer.y)) {
+                this.joystickPointer = pointer;
+            }
         });
+
+        this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+            if (this.joystickPointer === pointer) {
+                this.updateJoystick(pointer);
+            }
+        });
+
+        this.scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+            if (this.joystickPointer === pointer) {
+                this.resetJoystick();
+            }
+        });
+    }
+
+    private updateJoystick(pointer: Phaser.Input.Pointer) {
+        const base = this.joystickBase;
+        const maxDist = 60; // radius of base
+
+        const angle = Phaser.Math.Angle.Between(base.x, base.y, pointer.x, pointer.y);
+        const dist = Phaser.Math.Distance.Between(base.x, base.y, pointer.x, pointer.y);
+        const clampedDist = Math.min(dist, maxDist);
+
+        this.joystickThumb.x = base.x + Math.cos(angle) * clampedDist;
+        this.joystickThumb.y = base.y + Math.sin(angle) * clampedDist;
+
+        // Normalize vector
+        this.joystickVector.x = (this.joystickThumb.x - base.x) / maxDist;
+        this.joystickVector.y = (this.joystickThumb.y - base.y) / maxDist;
+    }
+
+    private resetJoystick() {
+        this.joystickPointer = null;
+        this.joystickThumb.x = this.joystickBase.x;
+        this.joystickThumb.y = this.joystickBase.y;
+        this.joystickVector = { x: 0, y: 0 };
     }
 
     showUpgradeMenu(options: any[], onSelect: (opt: any) => void) {
