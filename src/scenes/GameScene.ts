@@ -234,15 +234,22 @@ export class GameScene extends Phaser.Scene {
         if (this.enemies.countActive() >= 150) return;
 
         // Wave Logic
+        // Fixed: Ensure pool is typed correctly for Random
         const mins = this.survivalTime / 60000;
-        let pool: any[] = [ENEMY_TYPES[0], ENEMY_TYPES[1]]; // Red, Blue
-        if (mins >= 1) {
-            pool.push(ENEMY_TYPES[2], ENEMY_TYPES[3]); // Green, Yellow
-        }
+        let pool: any[] = [ENEMY_TYPES[0]]; // Start with Red only
+
+        // Mins 0-1: Red + Blue (low chance)
+        if (mins > 0.5) pool.push(ENEMY_TYPES[1]); // Blue enters at 30s
+
+        // Mins 1+: Green
+        if (mins >= 1) pool.push(ENEMY_TYPES[2]);
+
+        // Mins 2+: Yellow
+        if (mins >= 2) pool.push(ENEMY_TYPES[3]);
 
         const type = forceType
             ? ENEMY_TYPES.find(t => t.key === forceType)!
-            : Phaser.Utils.Array.GetRandom(pool as any);
+            : Phaser.Utils.Array.GetRandom(pool);
 
         // Edge Spawn
         const edge = Phaser.Math.Between(0, 3);
@@ -296,18 +303,22 @@ export class GameScene extends Phaser.Scene {
         // Check if enemy is in camera view
         const camera = this.cameras.main;
         // Simple bounds check with margin
-        const margin = 0;
-        if (enemy.x < camera.worldView.x - margin ||
-            enemy.x > camera.worldView.right + margin ||
-            enemy.y < camera.worldView.y - margin ||
-            enemy.y > camera.worldView.bottom + margin) {
+        const margin = -20; // Needs to be slightly INSIDE to be SAFE? Or users Bullet hits slightly outside?
+        // User said: "enemies if they are not being shown... are invincible"
+        // And "bullets cannot kill enemies off screen"
+        // Let's use a strict check: if bounding box is not fully contained? Or just center?
+        // Center is simplest.
+
+        if (enemy.x < camera.worldView.x ||
+            enemy.x > camera.worldView.right ||
+            enemy.y < camera.worldView.y ||
+            enemy.y > camera.worldView.bottom) {
 
             // Invincible off screen
-            projectile.deactivate(); // Consumed by the "shield" of offscreen?
-            // "make it so enemies if they are not being shown... are invincible"
+            // Logic fix: The user says "enemies if they are not being shown... are invincible"
             // "users bullets cannot kill enemies off screen"
-            // "bullets hit the edge... removed immediately". 
-            // The projectile update handles removal at edge, but if enemy is JUST off edge, we must ignore hit.
+            // So we return early, taking NO damage.
+            projectile.deactivate();
             return;
         }
 
@@ -525,17 +536,27 @@ export class GameScene extends Phaser.Scene {
         // Filter out evolutions initially
         let valid = pool.filter(u => !(u as any).isEvolution);
 
-        // Check for evolutions
+        // Check for evolutions (Requirement: 10 levels)
         const pLvl = this.upgradeCounts.get('projectile_up') || 0;
-        if (pLvl >= 5) valid.push(pool.find(u => u.id === 'evo_pierce')!);
+        if (pLvl >= 10) valid.push(pool.find(u => u.id === 'evo_pierce')!);
+
+        // Check for evolutions (Requirement: 10 levels)
+        const pLvl = this.upgradeCounts.get('projectile_up') || 0;
+        if (pLvl >= 10) valid.push(pool.find(u => u.id === 'evo_pierce')!);
 
         const cLvl = this.upgradeCounts.get('cooldown_down') || 0;
-        if (cLvl >= 5) valid.push(pool.find(u => u.id === 'evo_rapid')!);
+        if (cLvl >= 10) valid.push(pool.find(u => u.id === 'evo_rapid')!);
 
         Phaser.Utils.Array.Shuffle(valid);
         const options = valid.slice(0, 3);
 
-        this.ui.showUpgradeMenu(options, (opt) => {
+        // Decorate options with count
+        const optionsWithCounts = options.map(opt => {
+            const count = this.upgradeCounts.get(opt.id) || 0;
+            return { ...opt, displayName: `${opt.name} (${count})` };
+        });
+
+        this.ui.showUpgradeMenu(optionsWithCounts, (opt) => {
             this.applyUpgrade(opt.id);
             this.resumeGame();
         });

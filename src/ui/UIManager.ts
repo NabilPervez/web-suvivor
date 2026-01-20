@@ -175,7 +175,7 @@ export class UIManager {
                 .setStrokeStyle(2, 0xffffff)
                 .setInteractive();
 
-            const txt = this.scene.add.text(0, y, opt.name, { fontSize: '20px', color: '#ffff00' }).setOrigin(0.5);
+            const txt = this.scene.add.text(0, y, opt.displayName || opt.name, { fontSize: '20px', color: '#ffff00' }).setOrigin(0.5);
 
             btn.on('pointerdown', () => {
                 container.destroy();
