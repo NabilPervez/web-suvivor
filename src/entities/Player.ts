@@ -11,6 +11,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // Weapon stats
     public projectileCount: number = 1;
     public fireCooldown: number = 1000;
+    public magnetRadius: number = 100;
+    public damageMultiplier: number = 1;
     private lastFired: number = 0;
 
     private projectiles: Phaser.Physics.Arcade.Group;
@@ -128,6 +130,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     private spawnProjectile(angle: number) {
         const p = this.projectiles.get(this.x, this.y) as Projectile;
         if (p) {
+            p.damage = 1 * this.damageMultiplier;
             p.fire(this.x, this.y, angle, 500);
         }
     }

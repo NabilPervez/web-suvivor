@@ -11,6 +11,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     public spawnTime: number = 0;
 
     // Custom props for behaviors
+    public hp: number = 1;
+    public maxHp: number = 1;
     private oscPhase: number = 0;
     private moveSpeed: number = 100;
     private straightAngle: number = 0;

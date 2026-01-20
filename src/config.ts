@@ -75,6 +75,16 @@ export const UPGRADES = [
         name: '+1 Projectile',
         description: 'Fires an additional projectile',
     },
+    {
+        id: 'damage_up',
+        name: '+20% Damage',
+        description: 'Increases projectile damage',
+    },
+    {
+        id: 'magnet_range',
+        name: '+Magnet Range',
+        description: 'Increases item pickup range',
+    },
 ];
 
 export interface GameStats {

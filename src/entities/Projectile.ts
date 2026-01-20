@@ -8,6 +8,8 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
         // Check if texture exists, if not create a fallback (usually handled in preloader, but strict checks here)
     }
 
+    public damage: number = 1;
+
     fire(x: number, y: number, angle: number, speed: number) {
         this.enableBody(true, x, y, true, true);
         this.setActive(true);

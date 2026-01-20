@@ -30,7 +30,6 @@ export class GameScene extends Phaser.Scene {
     private level = 1;
     private exp = 0;
     private expToNextLevel = 1;
-    private prevExpReq = 0;
 
     // Difficulty
     // Difficulty & Stats
@@ -74,9 +73,7 @@ export class GameScene extends Phaser.Scene {
         this.isPaused = false;
         this.level = 1;
         this.exp = 0;
-        this.exp = 0;
-        this.expToNextLevel = 1;
-        this.prevExpReq = 0;
+        this.expToNextLevel = 10;
         this.currentSpawnDelay = 150 * GameScene.NextRunDiff.spawnRateMod;
         this.lastSpawnAdjust = 0;
 
@@ -134,6 +131,7 @@ export class GameScene extends Phaser.Scene {
 
         // --- Collisions ---
         this.physics.add.collider(this.projectiles, this.enemies, this.handleProjectileHit as any, undefined, this);
+        this.physics.add.collider(this.enemies, this.enemies); // Separation
         this.physics.add.overlap(this.player, this.enemies, this.handlePlayerHit as any, undefined, this);
         this.physics.add.overlap(this.player, this.orbs, this.handleOrbCollect as any, undefined, this);
 
@@ -179,6 +177,18 @@ export class GameScene extends Phaser.Scene {
         // Entities
         this.player.move(this.cursors, this.wasd, this.ui.joystickVector);
 
+        // Magnet Effect
+        this.orbs.children.each((orb: any) => {
+            if (!orb.active) return true;
+            const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, orb.x, orb.y);
+            if (dist < this.player.magnetRadius) {
+                this.physics.moveToObject(orb, this.player, 150);
+            } else {
+                (orb.body as Phaser.Physics.Arcade.Body).setVelocity(0);
+            }
+            return true;
+        });
+
         let closest: Enemy | null = null;
         let minDist = Infinity;
 
@@ -218,12 +228,16 @@ export class GameScene extends Phaser.Scene {
         // Safety cap
         if (this.enemies.countActive() >= 150) return;
 
-        // "how many spawn over time" logic: implicit in spawn rate
-        // Stats: we don't track total spawned, but enemiesDestroyed is close.
+        // Wave Logic
+        const mins = this.survivalTime / 60000;
+        let pool: any[] = [ENEMY_TYPES[0], ENEMY_TYPES[1]]; // Red, Blue
+        if (mins >= 1) {
+            pool.push(ENEMY_TYPES[2], ENEMY_TYPES[3]); // Green, Yellow
+        }
 
         const type = forceType
             ? ENEMY_TYPES.find(t => t.key === forceType)!
-            : Phaser.Utils.Array.GetRandom(ENEMY_TYPES as any);
+            : Phaser.Utils.Array.GetRandom(pool as any);
 
         // Edge Spawn
         const edge = Phaser.Math.Between(0, 3);
@@ -241,6 +255,11 @@ export class GameScene extends Phaser.Scene {
         if (enemy) {
             enemy.spawn(x, y, type);
             enemy.setPlayerReference(this.player);
+            // Scaling HP
+            enemy.hp = enemy.maxHp = 1 + Math.floor(mins * 0.5); // Increase 1 HP every 2 mins roughly? Or stronger?
+            // "Damage numbers... proof of power growth".
+            // Let's make it more notable: 1 + floor(mins).
+            enemy.hp = enemy.maxHp = 1 + Math.floor(mins);
         }
     }
 
@@ -249,15 +268,45 @@ export class GameScene extends Phaser.Scene {
 
         projectile.deactivate();
 
-        const ex = enemy.x;
-        const ey = enemy.y;
+        const damage = projectile.damage || 1;
+        enemy.hp -= damage;
 
-        // Orb pooling
-        this.spawnOrb(ex, ey);
+        // Show damage number
+        this.showFloatingText(enemy.x, enemy.y, `${damage}`);
 
-        enemy.deactivate();
-        this.stats.enemiesDestroyed++; // Track kill
-        soundManager.playHit();
+        if (enemy.hp <= 0) {
+            const ex = enemy.x;
+            const ey = enemy.y;
+
+            // Orb pooling
+            this.spawnOrb(ex, ey);
+
+            enemy.deactivate();
+            this.stats.enemiesDestroyed++; // Track kill
+            soundManager.playHit();
+        } else {
+            // Flash white?
+            enemy.setTint(0xffffff);
+            this.time.delayedCall(100, () => enemy.clearTint());
+        }
+    }
+
+    showFloatingText(x: number, y: number, text: string) {
+        const t = this.add.text(x, y, text, {
+            fontSize: '20px',
+            fontFamily: 'Arial', // Fallback
+            color: '#fff',
+            stroke: '#000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: t,
+            y: y - 30,
+            alpha: 0,
+            duration: 500,
+            onComplete: () => t.destroy()
+        });
     }
 
     spawnOrb(x: number, y: number) {
@@ -341,10 +390,11 @@ export class GameScene extends Phaser.Scene {
         this.stats.levelReached = this.level;
         this.exp = 0;
         this.exp = 0;
-        // Fibonacci Scaling
-        const next = this.expToNextLevel + this.prevExpReq;
-        this.prevExpReq = this.expToNextLevel;
-        this.expToNextLevel = next;
+        // Linear/Polynomial Scaling: Level * 5 + 5
+        // Example: Lvl 1->2 (10), Lvl 2->3 (15)...
+        this.expToNextLevel = this.level * 5 + 5;
+        // Reset per level or accumulate? Usually "XP for next level" resets to 0.
+        // Current logic: this.exp resets to 0. So expToNextLevel is the delta. Correct.
 
         if (this.player.health < this.player.maxHealth) {
             this.player.health++;
@@ -354,7 +404,10 @@ export class GameScene extends Phaser.Scene {
         soundManager.playLevelUp();
         this.pauseGame();
 
-        const options = UPGRADES.slice(0, 4); // Just picking first 4 static for now, randomization easy to add
+        // Randomize upgrades
+        const pool = [...UPGRADES];
+        Phaser.Utils.Array.Shuffle(pool);
+        const options = pool.slice(0, 3);
 
         this.ui.showUpgradeMenu(options, (opt) => {
             this.applyUpgrade(opt.id);
@@ -378,6 +431,12 @@ export class GameScene extends Phaser.Scene {
                 break;
             case 'projectile_up':
                 this.player.projectileCount++;
+                break;
+            case 'damage_up':
+                this.player.damageMultiplier += 0.2; // +20%
+                break;
+            case 'magnet_range':
+                this.player.magnetRadius += 30;
                 break;
         }
     }
