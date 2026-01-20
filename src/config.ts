@@ -29,19 +29,19 @@ export type PlayerShape = typeof SHAPES[keyof typeof SHAPES];
 export const SHAPE_CONFIG = {
     [SHAPES.CIRCLE]: {
         COLOR: 0xffffff,
-        COOLDOWN: 4000,
+        COOLDOWN: 3200,
         PROJECTILE_COUNT: 6,
         SPREAD: 360,
     },
     [SHAPES.TRIANGLE]: {
         COLOR: 0x00ffcc,
-        COOLDOWN: 2000,
+        COOLDOWN: 1600,
         PROJECTILE_COUNT: 3,
         SPREAD: 30,
     },
     [SHAPES.SQUARE]: {
         COLOR: 0xffa500,
-        COOLDOWN: 3000,
+        COOLDOWN: 2400,
         PROJECTILE_COUNT: 4,
         SPREAD: 90,
     },

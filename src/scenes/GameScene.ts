@@ -29,7 +29,8 @@ export class GameScene extends Phaser.Scene {
     // Leveling
     private level = 1;
     private exp = 0;
-    private expToNextLevel = 10;
+    private expToNextLevel = 1;
+    private prevExpReq = 0;
 
     // Difficulty
     // Difficulty & Stats
@@ -73,7 +74,9 @@ export class GameScene extends Phaser.Scene {
         this.isPaused = false;
         this.level = 1;
         this.exp = 0;
-        this.expToNextLevel = 10;
+        this.exp = 0;
+        this.expToNextLevel = 1;
+        this.prevExpReq = 0;
         this.currentSpawnDelay = 150 * GameScene.NextRunDiff.spawnRateMod;
         this.lastSpawnAdjust = 0;
 
@@ -337,7 +340,11 @@ export class GameScene extends Phaser.Scene {
         this.level++;
         this.stats.levelReached = this.level;
         this.exp = 0;
-        this.expToNextLevel = Math.floor(this.expToNextLevel * 1.2);
+        this.exp = 0;
+        // Fibonacci Scaling
+        const next = this.expToNextLevel + this.prevExpReq;
+        this.prevExpReq = this.expToNextLevel;
+        this.expToNextLevel = next;
 
         if (this.player.health < this.player.maxHealth) {
             this.player.health++;
