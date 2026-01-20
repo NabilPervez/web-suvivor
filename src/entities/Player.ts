@@ -99,12 +99,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             // If Square, maybe fire 4 cardinal directions relative to enemy? 
             // Regressing to original code logic for fidelity:
 
-            const angles = [angleToEnemy, angleToEnemy + Math.PI];
-
-            // If projectileCount > 2 (upgrade), add more? 
-            // Simplified generic logic:
-
-            // If shape is square, specifically use the 2-way fire plus extras if upgraded
+            const angles = [
+                angleToEnemy,
+                angleToEnemy + Math.PI / 2,
+                angleToEnemy + Math.PI,
+                angleToEnemy - Math.PI / 2
+            ];
 
             angles.forEach(a => this.spawnProjectile(a));
         } else {

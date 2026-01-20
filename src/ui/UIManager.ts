@@ -20,7 +20,7 @@ export class UIManager {
 
     createHUD(width: number, height: number, maxHealth: number) {
         // --- Timer ---
-        this.timerText = this.scene.add.text(width / 2, 20, 'Time: 00:00', {
+        this.timerText = this.scene.add.text(width / 2, 20, 'Survive: 03:20', {
             fontSize: '24px', color: '#ffffff'
         }).setOrigin(0.5, 0).setDepth(1000);
 
@@ -72,9 +72,11 @@ export class UIManager {
     }
 
     updateTimer(ms: number) {
-        const min = Math.floor(ms / 60000).toString().padStart(2, '0');
-        const sec = Math.floor((ms % 60000) / 1000).toString().padStart(2, '0');
-        this.timerText.setText(`Time: ${min}:${sec}`);
+        // Countdown
+        const left = Math.max(0, 200000 - ms);
+        const min = Math.floor(left / 60000).toString().padStart(2, '0');
+        const sec = Math.floor((left % 60000) / 1000).toString().padStart(2, '0');
+        this.timerText.setText(`Survive: ${min}:${sec}`);
     }
 
     updateLevel(level: number, currentXP: number, requiredXP: number) {
@@ -142,18 +144,18 @@ export class UIManager {
             container.add([btn, txt]);
         });
 
-        return container; // Return so we can destroy if needed externally? usually handled by click
+        return container;
     }
 
-    showGameOver(stats: string, onRestart: () => void) {
-        this.createFullScreenMenu('GAME OVER', 0x881111, stats, onRestart);
+    showGameOver(stats: string, onRestart: () => void, onCharSelect: () => void) {
+        this.createFullScreenMenu('GAME OVER', 0x881111, stats, onRestart, onCharSelect);
     }
 
-    showWin(stats: string, onRestart: () => void) {
-        this.createFullScreenMenu('YOU WIN!', 0x00aa00, stats, onRestart);
+    showWin(stats: string, onRestart: () => void, onCharSelect: () => void) {
+        this.createFullScreenMenu('YOU WIN!', 0x00aa00, stats, onRestart, onCharSelect);
     }
 
-    private createFullScreenMenu(title: string, color: number, body: string, action: () => void) {
+    private createFullScreenMenu(title: string, color: number, body: string, action: () => void, charSelect: () => void) {
         const { width, height } = this.scene.scale;
         const c = this.scene.add.container(width / 2, height / 2).setDepth(3000);
 
@@ -161,10 +163,16 @@ export class UIManager {
         c.add(this.scene.add.text(0, -70, title, { fontSize: '48px', fontStyle: 'bold', color: '#fff' }).setOrigin(0.5));
         c.add(this.scene.add.text(0, -10, body, { fontSize: '20px', color: '#fff', align: 'center' }).setOrigin(0.5));
 
-        const btn = this.scene.add.rectangle(0, 90, 220, 50, 0x4444aa, 0.95).setStrokeStyle(2, 0xffffff).setInteractive();
-        const txt = this.scene.add.text(0, 90, 'Play Again', { fontSize: '20px', color: '#ffff00' }).setOrigin(0.5);
-
+        // Play Again
+        const btn = this.scene.add.rectangle(0, 70, 220, 50, 0x4444aa, 0.95).setStrokeStyle(2, 0xffffff).setInteractive();
+        const txt = this.scene.add.text(0, 70, 'Play Again', { fontSize: '20px', color: '#ffff00' }).setOrigin(0.5);
         btn.on('pointerdown', action);
-        c.add([btn, txt]);
+
+        // Character Select
+        const btn2 = this.scene.add.rectangle(0, 130, 220, 40, 0x444444, 0.95).setStrokeStyle(2, 0xaaaaaa).setInteractive();
+        const txt2 = this.scene.add.text(0, 130, 'Character Select', { fontSize: '18px', color: '#ffffff' }).setOrigin(0.5);
+        btn2.on('pointerdown', charSelect);
+
+        c.add([btn, txt, btn2, txt2]);
     }
 }

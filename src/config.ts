@@ -8,6 +8,7 @@ export const GAME_CONFIG = {
     HEIGHT: 600,
     BG_COLOR: 0x1a1a1a,
     WIN_TIME_MS: 200000,
+    ORB_LIFESPAN: 30000,
 };
 
 export const PLAYER_STATS = {
@@ -42,7 +43,7 @@ export const SHAPE_CONFIG = {
         COLOR: 0xffa500,
         COOLDOWN: 3000,
         PROJECTILE_COUNT: 4,
-        SPREAD: 90, // Not exactly spread, but 4 directions
+        SPREAD: 90,
     },
 };
 

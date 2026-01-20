@@ -41,6 +41,17 @@ export class GameScene extends Phaser.Scene {
 
     init(data: { playerShape: PlayerShape }) {
         this.data.set('shape', data.playerShape || 'circle');
+
+        // Reset state on restart/init
+        this.survivalTime = 0;
+        this.gameWon = false;
+        this.gameOver = false;
+        this.isPaused = false;
+        this.level = 1;
+        this.exp = 0;
+        this.expToNextLevel = 10;
+        this.currentSpawnDelay = 150;
+        this.lastSpawnAdjust = 0;
     }
 
     create() {
@@ -92,8 +103,8 @@ export class GameScene extends Phaser.Scene {
             loop: true
         });
 
-        // Initial spawn
-        for (let i = 0; i < 10; i++) this.spawnEnemy('red');
+        // Initial spawn reduced (50%)
+        for (let i = 0; i < 5; i++) this.spawnEnemy();
     }
 
     update(time: number, delta: number) {
@@ -216,8 +227,8 @@ export class GameScene extends Phaser.Scene {
         orb.setTexture('expOrb');
         orb.setCircle(12);
 
-        // Auto-expire
-        this.time.delayedCall(5000, () => {
+        // Auto-expire (30s)
+        this.time.delayedCall(GAME_CONFIG.ORB_LIFESPAN, () => {
             if (orb.active) {
                 orb.setActive(false).setVisible(false);
                 orb.disableBody(true, true);
@@ -311,15 +322,15 @@ export class GameScene extends Phaser.Scene {
         this.gameWon = true;
         this.pauseGame();
         soundManager.playWin();
-        const stats = `Time: ${this.ui['timerText'].text.split(' ')[1]}\nLevel: ${this.level}`;
-        this.ui.showWin(stats, () => this.scene.restart());
+        const stats = `Survived! \nLevel: ${this.level}`;
+        this.ui.showWin(stats, () => this.scene.restart(), () => this.scene.start('MenuScene'));
     }
 
     handleGameOver() {
         this.gameOver = true;
         this.pauseGame();
         soundManager.playGameOver();
-        const stats = `Time: ${this.ui['timerText'].text.split(' ')[1]}\nLevel: ${this.level}`;
-        this.ui.showGameOver(stats, () => this.scene.restart());
+        const stats = `Survive Time: ${this.ui['timerText'].text.split(' ')[1]}\nLevel: ${this.level}`;
+        this.ui.showGameOver(stats, () => this.scene.restart(), () => this.scene.start('MenuScene'));
     }
 }
