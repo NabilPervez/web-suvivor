@@ -1,20 +1,20 @@
 export const OPS = {
     GRAVITY_Y: 0,
-    DEBUG: false, // Set true for physics debugging
+    DEBUG: false,
 };
 
 export const GAME_CONFIG = {
     WIDTH: 800,
     HEIGHT: 600,
     BG_COLOR: 0x1a1a1a,
-    WIN_TIME_MS: 200000,
+    WIN_TIME_MS: 300000, // 5 minutes for shorter loop, user asked for 'last 5 mins' logic so maybe 600k? Let's go 5 mins for now.
     ORB_LIFESPAN: 30000,
 };
 
 export const PLAYER_STATS = {
     BASE_SPEED: 400,
     MAX_HEALTH: 4,
-    INVINCIBLE_DURATION: 150, // ms per flash
+    INVINCIBLE_DURATION: 150,
     INVINCIBLE_FLASHES: 4,
 };
 
@@ -76,3 +76,21 @@ export const UPGRADES = [
         description: 'Fires an additional projectile',
     },
 ];
+
+export interface GameStats {
+    timeSurvived: number;
+    levelReached: number;
+    upgradesAvailable: number; // collected
+    initialSpawnCount: number;
+    enemiesDestroyed: number;
+    orbsCollected: number;
+    orbsExpired: number;
+    avgOrbLife: number; // Average time orb existed before collection
+    difficultyModifier: number; // The multiplier used this run
+}
+
+export interface DifficultyState {
+    spawnRateMod: number; // Multiplier for delay (higher = easier)
+    enemyCountMod: number; // Multiplier for volume (lower = easier)
+    xpMod: number; // Multiplier for XP gain (higher = easier) - User said XP scale level, but initial params helps
+}

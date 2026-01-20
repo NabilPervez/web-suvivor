@@ -199,18 +199,18 @@ export class UIManager {
         const { width, height } = this.scene.scale;
         const c = this.scene.add.container(width / 2, height / 2).setDepth(3000);
 
-        c.add(this.scene.add.rectangle(0, 0, 500, 300, color, 0.95).setStrokeStyle(6, 0xffff00));
-        c.add(this.scene.add.text(0, -70, title, { fontSize: '48px', fontStyle: 'bold', color: '#fff' }).setOrigin(0.5));
-        c.add(this.scene.add.text(0, -10, body, { fontSize: '20px', color: '#fff', align: 'center' }).setOrigin(0.5));
+        c.add(this.scene.add.rectangle(0, 0, 600, 500, color, 0.95).setStrokeStyle(6, 0xffff00));
+        c.add(this.scene.add.text(0, -200, title, { fontSize: '48px', fontStyle: 'bold', color: '#fff' }).setOrigin(0.5));
+        c.add(this.scene.add.text(0, -20, body, { fontSize: '16px', color: '#fff', align: 'center', lineSpacing: 5 }).setOrigin(0.5));
 
         // Play Again
-        const btn = this.scene.add.rectangle(0, 70, 220, 50, 0x4444aa, 0.95).setStrokeStyle(2, 0xffffff).setInteractive();
-        const txt = this.scene.add.text(0, 70, 'Play Again', { fontSize: '20px', color: '#ffff00' }).setOrigin(0.5);
+        const btn = this.scene.add.rectangle(0, 160, 220, 50, 0x4444aa, 0.95).setStrokeStyle(2, 0xffffff).setInteractive();
+        const txt = this.scene.add.text(0, 160, 'Play Again', { fontSize: '20px', color: '#ffff00' }).setOrigin(0.5);
         btn.on('pointerdown', action);
 
         // Character Select
-        const btn2 = this.scene.add.rectangle(0, 130, 220, 40, 0x444444, 0.95).setStrokeStyle(2, 0xaaaaaa).setInteractive();
-        const txt2 = this.scene.add.text(0, 130, 'Character Select', { fontSize: '18px', color: '#ffffff' }).setOrigin(0.5);
+        const btn2 = this.scene.add.rectangle(0, 220, 220, 40, 0x444444, 0.95).setStrokeStyle(2, 0xaaaaaa).setInteractive();
+        const txt2 = this.scene.add.text(0, 220, 'Character Select', { fontSize: '18px', color: '#ffffff' }).setOrigin(0.5);
         btn2.on('pointerdown', charSelect);
 
         c.add([btn, txt, btn2, txt2]);

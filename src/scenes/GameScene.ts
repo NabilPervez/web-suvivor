@@ -3,7 +3,7 @@ import { UIManager } from '../ui/UIManager';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
-import { GAME_CONFIG, ENEMY_TYPES, UPGRADES, PlayerShape } from '../config';
+import { GAME_CONFIG, ENEMY_TYPES, UPGRADES, PlayerShape, GameStats, DifficultyState } from '../config';
 import { soundManager } from '../managers/SoundManager';
 
 export class GameScene extends Phaser.Scene {
@@ -32,8 +32,32 @@ export class GameScene extends Phaser.Scene {
     private expToNextLevel = 10;
 
     // Difficulty
+    // Difficulty & Stats
     private currentSpawnDelay = 150;
     private lastSpawnAdjust = 0;
+
+    // Performance Tracking
+    private stats: GameStats = {
+        timeSurvived: 0,
+        levelReached: 1,
+        upgradesAvailable: 0,
+        initialSpawnCount: 2,
+        enemiesDestroyed: 0,
+        orbsCollected: 0,
+        orbsExpired: 0,
+        avgOrbLife: 0,
+        difficultyModifier: 1
+    };
+    private orbCreationTimes: Map<number, number> = new Map(); // Orb ID -> Creation Time
+    private totalOrbLifetime = 0;
+
+    // Adaptive State (Persisted via static or data pass)
+    // For simplicity, using a static on the class for now, or localStorage
+    private static NextRunDiff: DifficultyState = {
+        spawnRateMod: 1.0,
+        enemyCountMod: 1.0,
+        xpMod: 1.0
+    };
 
     constructor() {
         super({ key: 'GameScene' });
@@ -50,8 +74,23 @@ export class GameScene extends Phaser.Scene {
         this.level = 1;
         this.exp = 0;
         this.expToNextLevel = 10;
-        this.currentSpawnDelay = 150;
+        this.currentSpawnDelay = 150 * GameScene.NextRunDiff.spawnRateMod;
         this.lastSpawnAdjust = 0;
+
+        // Reset Stats
+        this.stats = {
+            timeSurvived: 0,
+            levelReached: 1,
+            upgradesAvailable: 0,
+            initialSpawnCount: Math.ceil(2 * GameScene.NextRunDiff.enemyCountMod),
+            enemiesDestroyed: 0,
+            orbsCollected: 0,
+            orbsExpired: 0,
+            avgOrbLife: 0,
+            difficultyModifier: GameScene.NextRunDiff.spawnRateMod
+        };
+        this.orbCreationTimes.clear();
+        this.totalOrbLifetime = 0;
     }
 
     create() {
@@ -103,8 +142,10 @@ export class GameScene extends Phaser.Scene {
             loop: true
         });
 
-        // Initial spawn reduced (50%)
-        for (let i = 0; i < 5; i++) this.spawnEnemy();
+        // Initial spawn reduced (50% of 5 -> ~2) based on user request "reduce by 50% again"
+        // Also applying difficulty mod
+        const initialCount = this.stats.initialSpawnCount;
+        for (let i = 0; i < initialCount; i++) this.spawnEnemy();
     }
 
     update(time: number, delta: number) {
@@ -121,7 +162,9 @@ export class GameScene extends Phaser.Scene {
         const elapsedSec = Math.floor(this.survivalTime / 500);
         if (elapsedSec - this.lastSpawnAdjust >= 20) {
             this.lastSpawnAdjust = elapsedSec;
-            this.currentSpawnDelay *= 0.8;
+            // "reduce the spawn rate over time by 50%" - slowing down the ramp up
+            // Original factor was 0.8 (aggressive). Let's try 0.9.
+            this.currentSpawnDelay *= 0.9;
             this.spawnTimer.reset({
                 delay: this.currentSpawnDelay,
                 callback: this.spawnEnemy,
@@ -172,6 +215,9 @@ export class GameScene extends Phaser.Scene {
         // Safety cap
         if (this.enemies.countActive() >= 150) return;
 
+        // "how many spawn over time" logic: implicit in spawn rate
+        // Stats: we don't track total spawned, but enemiesDestroyed is close.
+
         const type = forceType
             ? ENEMY_TYPES.find(t => t.key === forceType)!
             : Phaser.Utils.Array.GetRandom(ENEMY_TYPES as any);
@@ -207,6 +253,7 @@ export class GameScene extends Phaser.Scene {
         this.spawnOrb(ex, ey);
 
         enemy.deactivate();
+        this.stats.enemiesDestroyed++; // Track kill
         soundManager.playHit();
     }
 
@@ -228,10 +275,18 @@ export class GameScene extends Phaser.Scene {
         orb.setCircle(12);
 
         // Auto-expire (30s)
+        // Store creation time for tracking
+        // We use orb x/y as weak unique ID key for Map? Unsafe if recycled exact frame.
+        // Better: add property to orb (it's dynamic)
+
+        // Let's assume we can attach data to game object
+        (orb as any).birthTime = this.time.now;
+
         this.time.delayedCall(GAME_CONFIG.ORB_LIFESPAN, () => {
             if (orb.active) {
                 orb.setActive(false).setVisible(false);
                 orb.disableBody(true, true);
+                this.stats.orbsExpired++;
             }
         });
     }
@@ -260,7 +315,19 @@ export class GameScene extends Phaser.Scene {
 
         soundManager.playPickup();
 
-        this.exp++;
+        this.stats.orbsCollected++;
+
+        // Track lifespan
+        const birth = (orb as any).birthTime || 0;
+        if (birth > 0) {
+            const life = this.time.now - birth;
+            this.totalOrbLifetime += life;
+            this.stats.avgOrbLife = this.totalOrbLifetime / this.stats.orbsCollected;
+        }
+
+        // XP Gain: 1 + scale with level
+        const xpGain = 1 + Math.floor((this.level - 1) * 0.5) * GameScene.NextRunDiff.xpMod;
+        this.exp += xpGain;
         if (this.exp >= this.expToNextLevel) {
             this.levelUp();
         }
@@ -268,6 +335,7 @@ export class GameScene extends Phaser.Scene {
 
     levelUp() {
         this.level++;
+        this.stats.levelReached = this.level;
         this.exp = 0;
         this.expToNextLevel = Math.floor(this.expToNextLevel * 1.2);
 
@@ -288,6 +356,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     applyUpgrade(id: string) {
+        this.stats.upgradesAvailable++; // Track upgrades taken
         switch (id) {
             case 'max_health':
                 this.player.maxHealth++;
@@ -320,17 +389,71 @@ export class GameScene extends Phaser.Scene {
 
     handleWin() {
         this.gameWon = true;
+        this.stats.timeSurvived = this.survivalTime;
         this.pauseGame();
         soundManager.playWin();
-        const stats = `Survived! \nLevel: ${this.level}`;
-        this.ui.showWin(stats, () => this.scene.restart(), () => this.scene.start('MenuScene'));
+
+        this.updateAdaptiveDifficulty(true);
+        const report = this.generateReport();
+
+        this.ui.showWin(report, () => this.scene.restart(), () => this.scene.start('MenuScene'));
     }
 
     handleGameOver() {
         this.gameOver = true;
+        this.stats.timeSurvived = this.survivalTime;
         this.pauseGame();
         soundManager.playGameOver();
-        const stats = `Survive Time: ${this.ui['timerText'].text.split(' ')[1]}\nLevel: ${this.level}`;
-        this.ui.showGameOver(stats, () => this.scene.restart(), () => this.scene.start('MenuScene'));
+
+        this.updateAdaptiveDifficulty(false);
+        const report = this.generateReport();
+
+        this.ui.showGameOver(report, () => this.scene.restart(), () => this.scene.start('MenuScene'));
+    }
+
+    updateAdaptiveDifficulty(win: boolean) {
+        // Goal: User gets to last 5 mins (300s? no currently 300s is win. so get to 200s+?)
+        // If win or > 80% time, increase difficulty slightly (or keep stable)
+        // If die early (< 50% time), make easier
+
+        const progress = this.survivalTime / GAME_CONFIG.WIN_TIME_MS; // 0..1
+
+        if (progress < 0.2) {
+            // Died super early (< 1 min)
+            GameScene.NextRunDiff.spawnRateMod *= 1.2; // 20% slower spawns
+            GameScene.NextRunDiff.enemyCountMod *= 0.8; // 20% fewer enemies start
+            GameScene.NextRunDiff.xpMod *= 1.2; // 20% more XP
+        } else if (progress < 0.5) {
+            // Died mid game
+            GameScene.NextRunDiff.spawnRateMod *= 1.1;
+            GameScene.NextRunDiff.xpMod *= 1.1;
+        } else if (progress > 0.9 || win) {
+            // Reached end game -> Normalize or slight harden? 
+            // "intention to make the user get to the last five minutes"
+            // If they are already there, we can stabilize.
+            // Maybe reset slowly to 1?
+            GameScene.NextRunDiff.spawnRateMod = (GameScene.NextRunDiff.spawnRateMod + 1.0) / 2;
+            GameScene.NextRunDiff.enemyCountMod = (GameScene.NextRunDiff.enemyCountMod + 1.0) / 2;
+            GameScene.NextRunDiff.xpMod = (GameScene.NextRunDiff.xpMod + 1.0) / 2;
+        }
+
+        // Clamp
+        GameScene.NextRunDiff.enemyCountMod = Phaser.Math.Clamp(GameScene.NextRunDiff.enemyCountMod, 0.5, 3);
+        GameScene.NextRunDiff.spawnRateMod = Phaser.Math.Clamp(GameScene.NextRunDiff.spawnRateMod, 0.5, 3);
+        GameScene.NextRunDiff.xpMod = Phaser.Math.Clamp(GameScene.NextRunDiff.xpMod, 0.5, 5);
+
+        console.log("Adaptive Difficulty for Next Run:", GameScene.NextRunDiff);
+    }
+
+    generateReport(): string {
+        const s = this.stats;
+        return `Survived: ${(s.timeSurvived / 1000).toFixed(1)}s
+Level: ${s.levelReached}
+Upgrades: ${s.upgradesAvailable}
+Kills: ${s.enemiesDestroyed}
+Orbs: ${s.orbsCollected} (Lost: ${s.orbsExpired})
+Avg Orb Collection: ${(s.avgOrbLife / 1000).toFixed(1)}s
+Start Spawn: ${s.initialSpawnCount}
+Diff Mod: ${s.difficultyModifier.toFixed(2)}x`;
     }
 }
