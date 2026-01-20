@@ -52,7 +52,7 @@ class GameScene extends Phaser.Scene {
         // --- Upgrade Definitions ---
         // A fixed list of upgrades the player can choose from upon leveling up.
         this.upgradeOptions = [
-            { 
+            {
                 name: '+1 Max Health', // The name of the upgrade.
                 apply: () => { // The function that applies the upgrade.
                     this.maxHealth++; // Increase max health by one.
@@ -60,7 +60,7 @@ class GameScene extends Phaser.Scene {
                     if (this.playerHealth < this.maxHealth) {
                         this.playerHealth++;
                     }
-                } 
+                }
             },
             { name: '+15% Speed', apply: () => { this.playerSpeed = Math.round(this.playerSpeed * 1.15); } }, // Increases player speed.
             { name: '-20% Cooldown', apply: () => { this.fireCooldown = Math.max(200, Math.round(this.fireCooldown * 0.8)); } }, // Reduces weapon cooldown.
@@ -199,7 +199,7 @@ class GameScene extends Phaser.Scene {
         if (elapsedSec - this.lastSpawnAdjust >= 20) {
             this.lastSpawnAdjust = elapsedSec;
             // Slightly decrease the spawn delay over time to spawn enemies faster (Note: 1.00 is not a change, should be < 1.0).
-            this.currentSpawnDelay *= 0.80; 
+            this.currentSpawnDelay *= 0.80;
             this.spawnTimer.reset({ delay: this.currentSpawnDelay, callback: this.spawnEnemy, callbackScope: this, loop: true });
         }
 
@@ -611,7 +611,7 @@ class GameScene extends Phaser.Scene {
         enemy.setActive(false).setVisible(false); // Deactivate the enemy.
 
         // --- Spawn Experience Orb ---
-        const orb = this.orbs.create(ex, ey, null);
+        const orb = this.orbs.get(ex, ey); // Use get() to recycle orbs
         // Create the orb texture if it doesn't exist.
         if (!this.textures.exists('expOrbBlue')) {
             const g = this.add.graphics();
@@ -629,9 +629,9 @@ class GameScene extends Phaser.Scene {
         orb.body && orb.body.setVelocity(0, 0);
         orb.setDepth(120);
 
-        // Automatically destroy the orb after 5 seconds if not collected.
+        // Automatically deactivate the orb after 5 seconds if not collected.
         this.time.delayedCall(5000, () => {
-            if (orb && orb.active) orb.destroy();
+            if (orb && orb.active) orb.setActive(false).setVisible(false);
         });
     }
 
@@ -644,7 +644,6 @@ class GameScene extends Phaser.Scene {
         this.playerHealth--; // Reduce player health.
 
         enemy.setActive(false).setVisible(false); // Deactivate the enemy.
-        enemy.destroy(); // Permanently remove the enemy.
 
         // --- Game Over Check ---
         if (this.playerHealth <= 0) {
@@ -674,7 +673,7 @@ class GameScene extends Phaser.Scene {
 
     // Spawns a simple orb (not currently used in the main gameplay loop).
     spawnSimpleOrb(x, y) {
-        const orb = this.orbs.create(x, y, null);
+        const orb = this.orbs.get(x, y);
         if (!this.textures.exists('simpleOrb')) {
             const graphics = this.add.graphics();
             graphics.fillStyle(0x3399ff, 1);
@@ -691,14 +690,14 @@ class GameScene extends Phaser.Scene {
         orb.setDepth(120);
 
         this.time.delayedCall(5000, () => {
-            if (orb && orb.active) orb.destroy();
+            if (orb && orb.active) orb.setActive(false).setVisible(false);
         });
     }
 
     // Called when the player collects an orb.
     collectOrb(player, orb) {
         if (!orb || !orb.active) return; // Make sure the orb is valid.
-        orb.destroy(); // Destroy the orb sprite.
+        orb.setActive(false).setVisible(false); // Deactivate instead of destroy
         this.orbCount++; // Increment the player's orb/XP count.
 
         // --- Level Up Check ---
