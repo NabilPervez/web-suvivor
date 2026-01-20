@@ -143,9 +143,9 @@ export class GameScene extends Phaser.Scene {
             loop: true
         });
 
-        // Initial spawn reduced (50% of 5 -> ~2) based on user request "reduce by 50% again"
+        // Initial spawn reduced (50% of 5 -> ~2, user requested another 50% -> 1)
         // Also applying difficulty mod
-        const initialCount = this.stats.initialSpawnCount;
+        const initialCount = Math.ceil(this.stats.initialSpawnCount * 0.5);
         for (let i = 0; i < initialCount; i++) this.spawnEnemy();
     }
 
@@ -266,7 +266,12 @@ export class GameScene extends Phaser.Scene {
     handleProjectileHit(projectile: Projectile, enemy: Enemy) {
         if (!projectile.active || !enemy.active) return;
 
-        projectile.deactivate();
+        // Piercing logic
+        if (projectile.pierce > 0) {
+            projectile.pierce--;
+        } else {
+            projectile.deactivate();
+        }
 
         const damage = projectile.damage || 1;
         enemy.hp -= damage;
@@ -437,6 +442,9 @@ export class GameScene extends Phaser.Scene {
                 break;
             case 'magnet_range':
                 this.player.magnetRadius += 30;
+                break;
+            case 'pierce_up':
+                this.player.pierceCount++;
                 break;
         }
     }

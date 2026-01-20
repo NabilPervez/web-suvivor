@@ -9,6 +9,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
 
     public damage: number = 1;
+    public pierce: number = 0;
 
     fire(x: number, y: number, angle: number, speed: number) {
         this.enableBody(true, x, y, true, true);

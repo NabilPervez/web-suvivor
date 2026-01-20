@@ -13,6 +13,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     public fireCooldown: number = 1000;
     public magnetRadius: number = 100;
     public damageMultiplier: number = 1;
+    public pierceCount: number = 0;
     private lastFired: number = 0;
 
     private projectiles: Phaser.Physics.Arcade.Group;
@@ -46,6 +47,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
             } else if (shape === SHAPES.SQUARE) {
                 graphics.fillStyle(config.COLOR, 1);
                 graphics.fillRect(0, 0, 32, 32);
+                graphics.fillRect(0, 0, 32, 32);
+                graphics.generateTexture(texKey, 32, 32);
+            } else if (shape === SHAPES.DIAMOND) {
+                graphics.fillStyle(config.COLOR, 1);
+                // Diamond shape
+                graphics.beginPath();
+                graphics.moveTo(16, 0);
+                graphics.lineTo(32, 16);
+                graphics.lineTo(16, 32);
+                graphics.lineTo(0, 16);
+                graphics.closePath();
+                graphics.fillPath();
                 graphics.generateTexture(texKey, 32, 32);
             }
             graphics.destroy();
@@ -131,6 +144,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         const p = this.projectiles.get(this.x, this.y) as Projectile;
         if (p) {
             p.damage = 1 * this.damageMultiplier;
+            p.pierce = this.pierceCount;
             p.fire(this.x, this.y, angle, 500);
         }
     }

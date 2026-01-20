@@ -22,6 +22,7 @@ export const SHAPES = {
     CIRCLE: 'circle',
     TRIANGLE: 'triangle',
     SQUARE: 'square',
+    DIAMOND: 'diamond',
 } as const;
 
 export type PlayerShape = typeof SHAPES[keyof typeof SHAPES];
@@ -44,6 +45,12 @@ export const SHAPE_CONFIG = {
         COOLDOWN: 2400,
         PROJECTILE_COUNT: 4,
         SPREAD: 90,
+    },
+    [SHAPES.DIAMOND]: {
+        COLOR: 0x9933ff,
+        COOLDOWN: 400, // Very fast
+        PROJECTILE_COUNT: 1,
+        SPREAD: 0,
     },
 };
 
@@ -84,6 +91,11 @@ export const UPGRADES = [
         id: 'magnet_range',
         name: '+Magnet Range',
         description: 'Increases item pickup range',
+    },
+    {
+        id: 'pierce_up',
+        name: '+1 Pierce',
+        description: 'Projectiles hit +1 enemy',
     },
 ];
 
