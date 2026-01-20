@@ -62,6 +62,23 @@ export class GameScene extends Phaser.Scene {
     private upgradeCounts: Map<string, number> = new Map();
     private lastEliteTime = 0;
 
+    // Fibonacci scaling
+    private static readonly FIB = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233];
+    private getMaxEnemies(): number {
+        // Start scaling after 3s
+        if (this.survivalTime < 3000) return 1;
+
+        // Scale every 20s roughly?
+        // Or "gradually over time"
+        // Let's increment index every 10 seconds after the first 3s
+        const step = Math.floor((this.survivalTime - 3000) / 20000);
+        // 20s intervals for 5 mins = 15 steps. FIB[15] is safely large.
+
+        const idx = Math.min(step + 1, GameScene.FIB.length - 1);
+        // Apply enemyCountMod multiplier to the cap too?
+        return Math.floor(GameScene.FIB[idx] * GameScene.NextRunDiff.enemyCountMod);
+    }
+
     constructor() {
         super({ key: 'GameScene' });
     }
@@ -148,10 +165,9 @@ export class GameScene extends Phaser.Scene {
             loop: true
         });
 
-        // Initial spawn reduced (50% of 5 -> ~2, user requested another 50% -> 1)
-        // Also applying difficulty mod
-        const initialCount = Math.ceil(this.stats.initialSpawnCount * 0.5);
-        for (let i = 0; i < initialCount; i++) this.spawnEnemy();
+        // Initial spawn: Just 1 Red enemy (force start small)
+        // User requested: "start the game with only 1 red enemy"
+        this.spawnEnemy('red');
     }
 
     update(time: number, delta: number) {
@@ -230,8 +246,11 @@ export class GameScene extends Phaser.Scene {
     spawnEnemy(forceType?: string) {
         if (this.isPaused) return;
 
-        // Safety cap
-        if (this.enemies.countActive() >= 150) return;
+        // Safety cap using Fibonacci
+        const maxEnemies = this.getMaxEnemies();
+        // Hard cap of 200 for performance (group size is 200)
+        const hardCap = 150;
+        if (this.enemies.countActive() >= Math.min(maxEnemies, hardCap)) return;
 
         // Wave Logic
         // Fixed: Ensure pool is typed correctly for Random
