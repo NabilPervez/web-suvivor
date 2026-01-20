@@ -9,7 +9,7 @@ export class UIManager {
     private levelText!: Phaser.GameObjects.Text;
     private expText!: Phaser.GameObjects.Text;
     private cooldownBarFill!: Phaser.GameObjects.Rectangle;
-    private dpadContainer!: Phaser.GameObjects.Container;
+    // private dpadContainer!: Phaser.GameObjects.Container; // Removed
 
     // Input State from UI (Joystick)
     private joystickBase!: Phaser.GameObjects.Arc;
