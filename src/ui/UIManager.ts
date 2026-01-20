@@ -77,7 +77,8 @@ export class UIManager {
 
     updateTimer(ms: number) {
         // Countdown
-        const left = Math.max(0, 200000 - ms);
+        // Hardcoded import avoidance: 300000 = 5 mins
+        const left = Math.max(0, 300000 - ms);
         const min = Math.floor(left / 60000).toString().padStart(2, '0');
         const sec = Math.floor((left % 60000) / 1000).toString().padStart(2, '0');
         this.timerText.setText(`Survive: ${min}:${sec}`);

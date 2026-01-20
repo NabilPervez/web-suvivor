@@ -59,6 +59,9 @@ export class GameScene extends Phaser.Scene {
         xpMod: 1.0
     };
 
+    private upgradeCounts: Map<string, number> = new Map();
+    private lastEliteTime = 0;
+
     constructor() {
         super({ key: 'GameScene' });
     }
@@ -91,6 +94,8 @@ export class GameScene extends Phaser.Scene {
         };
         this.orbCreationTimes.clear();
         this.totalOrbLifetime = 0;
+        this.upgradeCounts.clear();
+        this.lastEliteTime = 0;
     }
 
     create() {
@@ -261,10 +266,50 @@ export class GameScene extends Phaser.Scene {
             // Let's make it more notable: 1 + floor(mins).
             enemy.hp = enemy.maxHp = 1 + Math.floor(mins);
         }
+
+        // Elite Check (every 60s)
+        if (this.survivalTime - this.lastEliteTime > 60000) {
+            this.lastEliteTime = this.survivalTime;
+            this.spawnElite();
+        }
+    }
+
+    spawnElite() {
+        // Find a safe spot? Or just random edge
+        const x = Phaser.Math.Between(100, 700);
+        const y = -100; // Top
+        const elite = this.enemies.get(x, y);
+        if (elite) {
+            elite.spawn(x, y, ENEMY_TYPES[0]); // Red base
+            elite.setPlayerReference(this.player);
+            elite.setScale(2.5);
+            elite.hp = elite.maxHp = 50 * (1 + this.survivalTime / 60000);
+            elite.setTint(0xff00ff); // Purple
+            (elite as any).isElite = true;
+        }
     }
 
     handleProjectileHit(projectile: Projectile, enemy: Enemy) {
         if (!projectile.active || !enemy.active) return;
+
+        // Off-screen invincibility
+        // Check if enemy is in camera view
+        const camera = this.cameras.main;
+        // Simple bounds check with margin
+        const margin = 0;
+        if (enemy.x < camera.worldView.x - margin ||
+            enemy.x > camera.worldView.right + margin ||
+            enemy.y < camera.worldView.y - margin ||
+            enemy.y > camera.worldView.bottom + margin) {
+
+            // Invincible off screen
+            projectile.deactivate(); // Consumed by the "shield" of offscreen?
+            // "make it so enemies if they are not being shown... are invincible"
+            // "users bullets cannot kill enemies off screen"
+            // "bullets hit the edge... removed immediately". 
+            // The projectile update handles removal at edge, but if enemy is JUST off edge, we must ignore hit.
+            return;
+        }
 
         // Piercing logic
         if (projectile.pierce > 0) {
@@ -284,7 +329,15 @@ export class GameScene extends Phaser.Scene {
             const ey = enemy.y;
 
             // Orb pooling
-            this.spawnOrb(ex, ey);
+            if ((enemy as any).isElite) {
+                // Drop Chest or Guaranteed upgrade?
+                // For now, simpler: massive XP + special event? 
+                // Requests: "drops a chest (guaranteed upgrade + health)"
+                // Let's drop a Gold Box (Chest) which is an Orb with special flag
+                this.spawnChest(ex, ey);
+            } else {
+                this.spawnOrb(ex, ey);
+            }
 
             enemy.deactivate();
             this.stats.enemiesDestroyed++; // Track kill
@@ -328,6 +381,21 @@ export class GameScene extends Phaser.Scene {
             g.generateTexture('expOrb', 24, 24);
             g.destroy();
         }
+
+        // Gold Orb logic
+        // 1/200 chance or special
+        const isGold = Phaser.Math.Between(0, 200) === 0;
+
+        if (isGold) {
+            orb.setTint(0xffd700); // Gold
+            (orb as any).isGold = true;
+            orb.setScale(1.5);
+        } else {
+            orb.clearTint();
+            (orb as any).isGold = false;
+            orb.setScale(1.0);
+        }
+
         orb.setTexture('expOrb');
         orb.setCircle(12);
 
@@ -348,6 +416,22 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
+    spawnChest(x: number, y: number) {
+        // Reusing orb group but with chest visual?
+        // Or specific chest sprite
+        const chest = this.orbs.get(x, y);
+        if (!chest) return;
+
+        chest.setActive(true).setVisible(true);
+        chest.enableBody(true, x, y, true, true);
+        chest.setTexture('expOrb'); // Placeholder
+        chest.setTint(0xff00ff); // Magenta
+        chest.setScale(2.0);
+        (chest as any).isChest = true;
+        (chest as any).birthTime = this.time.now;
+        // No expiry for chest?
+    }
+
     handlePlayerHit(player: Player, enemy: Enemy) {
         if (player.isInvincible || !enemy.active) return;
 
@@ -366,6 +450,24 @@ export class GameScene extends Phaser.Scene {
 
     handleOrbCollect(_player: Player, orb: Phaser.Physics.Arcade.Sprite) {
         if (!orb.active) return;
+
+        // Chest logic
+        if ((orb as any).isChest) {
+            orb.setActive(false).setVisible(false);
+            orb.disableBody(true, true);
+            soundManager.playPickup(); // If exists, or just Pickup
+            // Heal
+            this.player.health = Math.min(this.player.health + 2, this.player.maxHealth);
+            this.ui.updateHealth(this.player.health, this.player.maxHealth);
+            // Free Upgrade
+            this.handleChestOpen();
+            return;
+        }
+
+        // Gold Orb Logic
+        if ((orb as any).isGold) {
+            this.collectAllOrbs();
+        }
 
         orb.setActive(false).setVisible(false);
         orb.disableBody(true, true);
@@ -390,6 +492,15 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
+    collectAllOrbs() {
+        this.orbs.children.each((o: any) => {
+            if (o.active && !o.isChest) {
+                this.physics.moveToObject(o, this.player, 800); // Fast suck
+            }
+            return true;
+        });
+    }
+
     levelUp() {
         this.level++;
         this.stats.levelReached = this.level;
@@ -409,10 +520,20 @@ export class GameScene extends Phaser.Scene {
         soundManager.playLevelUp();
         this.pauseGame();
 
-        // Randomize upgrades
+        // Evolution Checks
         const pool = [...UPGRADES];
-        Phaser.Utils.Array.Shuffle(pool);
-        const options = pool.slice(0, 3);
+        // Filter out evolutions initially
+        let valid = pool.filter(u => !(u as any).isEvolution);
+
+        // Check for evolutions
+        const pLvl = this.upgradeCounts.get('projectile_up') || 0;
+        if (pLvl >= 5) valid.push(pool.find(u => u.id === 'evo_pierce')!);
+
+        const cLvl = this.upgradeCounts.get('cooldown_down') || 0;
+        if (cLvl >= 5) valid.push(pool.find(u => u.id === 'evo_rapid')!);
+
+        Phaser.Utils.Array.Shuffle(valid);
+        const options = valid.slice(0, 3);
 
         this.ui.showUpgradeMenu(options, (opt) => {
             this.applyUpgrade(opt.id);
@@ -420,8 +541,24 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
+    handleChestOpen() {
+        this.pauseGame();
+        // Guaranteed upgrade
+        // Similar logic to level up but maybe forced "Good" one? 
+        // For now just show menu
+        const pool = [...UPGRADES].filter(u => !(u as any).isEvolution);
+        Phaser.Utils.Array.Shuffle(pool);
+        this.ui.showUpgradeMenu(pool.slice(0, 3), (opt) => {
+            this.applyUpgrade(opt.id);
+            this.resumeGame();
+        });
+    }
+
     applyUpgrade(id: string) {
         this.stats.upgradesAvailable++; // Track upgrades taken
+        const current = this.upgradeCounts.get(id) || 0;
+        this.upgradeCounts.set(id, current + 1);
+
         switch (id) {
             case 'max_health':
                 this.player.maxHealth++;
@@ -432,10 +569,18 @@ export class GameScene extends Phaser.Scene {
                 this.player.speed = Math.round(this.player.speed * 1.15);
                 break;
             case 'cooldown_down':
-                this.player.fireCooldown = Math.max(200, Math.round(this.player.fireCooldown * 0.8));
+                this.player.fireCooldown = Math.max(50, Math.round(this.player.fireCooldown * 0.8));
+                break;
+            case 'evo_rapid': // Mini-gun
+                this.player.fireCooldown = 100;
                 break;
             case 'projectile_up':
                 this.player.projectileCount++;
+                break;
+            case 'evo_pierce': // Death Ray
+                this.player.pierceCount += 100;
+                this.player.damageMultiplier *= 2;
+                this.player.setScale(1.5); // Giant
                 break;
             case 'damage_up':
                 this.player.damageMultiplier += 0.2; // +20%

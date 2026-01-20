@@ -97,6 +97,16 @@ export const UPGRADES = [
         name: '+1 Pierce',
         description: 'Projectiles hit +1 enemy',
     },
+    {
+        id: 'evo_pierce',
+        name: '>> DEATH RAY <<',
+        description: 'Infinite Pierce + Giant Size',
+    },
+    {
+        id: 'evo_rapid',
+        name: '>> MINIGUN <<',
+        description: '0.1s Cooldown',
+    },
 ];
 
 export interface GameStats {
