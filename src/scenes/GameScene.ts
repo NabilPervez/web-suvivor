@@ -302,22 +302,15 @@ export class GameScene extends Phaser.Scene {
         // Off-screen invincibility
         // Check if enemy is in camera view
         const camera = this.cameras.main;
-        // Simple bounds check with margin
-        const margin = -20; // Needs to be slightly INSIDE to be SAFE? Or users Bullet hits slightly outside?
-        // User said: "enemies if they are not being shown... are invincible"
-        // And "bullets cannot kill enemies off screen"
-        // Let's use a strict check: if bounding box is not fully contained? Or just center?
-        // Center is simplest.
+        // Simple bounds check with margin of -20 (slightly inside)
+        const margin = -20;
 
-        if (enemy.x < camera.worldView.x ||
-            enemy.x > camera.worldView.right ||
-            enemy.y < camera.worldView.y ||
-            enemy.y > camera.worldView.bottom) {
+        if (enemy.x < camera.worldView.x - margin ||
+            enemy.x > camera.worldView.right + margin ||
+            enemy.y < camera.worldView.y - margin ||
+            enemy.y > camera.worldView.bottom + margin) {
 
             // Invincible off screen
-            // Logic fix: The user says "enemies if they are not being shown... are invincible"
-            // "users bullets cannot kill enemies off screen"
-            // So we return early, taking NO damage.
             projectile.deactivate();
             return;
         }
@@ -535,10 +528,6 @@ export class GameScene extends Phaser.Scene {
         const pool = [...UPGRADES];
         // Filter out evolutions initially
         let valid = pool.filter(u => !(u as any).isEvolution);
-
-        // Check for evolutions (Requirement: 10 levels)
-        const pLvl = this.upgradeCounts.get('projectile_up') || 0;
-        if (pLvl >= 10) valid.push(pool.find(u => u.id === 'evo_pierce')!);
 
         // Check for evolutions (Requirement: 10 levels)
         const pLvl = this.upgradeCounts.get('projectile_up') || 0;
